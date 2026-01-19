@@ -23,7 +23,7 @@ steps:
       key:
         from_secret: ssh_private_key
       port:
-        from_secret: ssh_port
+        from_secret: port
       command_timeout: 5m
       script:
         - "echo Connected to Oracle Cloud server"
