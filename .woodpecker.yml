@@ -7,12 +7,28 @@ steps:
   - name: notify-start
     image: alpine:latest
     commands:
-      - "echo 'Starting MRadio deployment pipeline...'"
-      - "echo 'Branch: ${CI_COMMIT_BRANCH}'"
-      - "echo 'Commit: ${CI_COMMIT_SHA}'"
-      - "echo 'Author: ${CI_COMMIT_AUTHOR}'"
+      - echo "Starting MRadio deployment pipeline..."
+      - echo "Branch: ${CI_COMMIT_BRANCH}"
+      - echo "Commit: ${CI_COMMIT_SHA}"
+      - echo "Author: ${CI_COMMIT_AUTHOR}"
 
-  # Step 2: Deploy to Oracle Cloud Server
+  # 🔍 Step 2: Verify SSH key is loaded & valid
+  - name: verify-ssh-key
+    image: alpine:latest
+    secrets:
+      - ssh_private_key
+    commands:
+      - apk add --no-cache openssh
+      - echo "🔍 Checking SSH key injection..."
+      - test -n "$ssh_private_key" && echo "✅ SSH key is present" || echo "❌ SSH key is EMPTY"
+      - echo "🔍 Validating SSH private key format..."
+      - echo "$ssh_private_key" | ssh-keygen -lf - || echo "❌ Invalid or corrupted SSH key"
+      - echo "🔍 First line of key:"
+      - echo "$ssh_private_key" | sed -n '1p' | cat -A
+      - echo "🔍 Last line of key:"
+      - echo "$ssh_private_key" | sed -n '$p' | cat -A
+
+  # 🚀 Step 3: Deploy to Oracle Cloud Server
   - name: deploy
     image: appleboy/drone-ssh
     settings:
@@ -23,33 +39,33 @@ steps:
       port: 22
       command_timeout: 5m
       script:
-        - "echo '📡 Connected to Oracle Cloud server'"
-        - "cd /home/ubuntu/docker/radio"
-        - "chmod +x run.sh"
-        - "./run.sh radio-main"
+        - echo "📡 Connected to Oracle Cloud server"
+        - cd /home/ubuntu/docker/radio
+        - chmod +x run.sh
+        - ./run.sh radio-main
 
-  # Step 3: Health check
+  # 🏥 Step 4: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
-      - "sleep 10"
-      - "echo '🏥 Performing health check...'"
-      - "curl -f http://140.238.251.85:9126/ || echo '⚠️  Service not responding yet'"
+      - sleep 10
+      - echo "🏥 Performing health check..."
+      - curl -f http://140.238.251.85:9126/ || echo "⚠️ Service not responding yet"
 
-  # Step 4: Success notification
+  # ✅ Step 5: Success notification
   - name: notify-success
     image: alpine:latest
     commands:
-      - "echo '✅ Deployment successful!'"
-      - "echo '🎵 MRadio is now live at http://140.238.251.85:9126'"
+      - echo "✅ Deployment successful!"
+      - echo "🎵 MRadio is now live at http://140.238.251.85:9126"
     when:
       status: success
 
-  # Step 5: Failure notification
+  # ❌ Step 6: Failure notification
   - name: notify-failure
     image: alpine:latest
     commands:
-      - "echo '❌ Deployment failed!'"
-      - "echo 'Please check the logs above for errors'"
+      - echo "❌ Deployment failed!"
+      - echo "Please check the logs above for errors"
     when:
       status: failure
