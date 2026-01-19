@@ -3,6 +3,7 @@ when:
   event: push
 
 steps:
+  # Step 1: Build notification
   - name: notify-start
     image: alpine:latest
     commands:
@@ -11,21 +12,24 @@ steps:
       - "echo Commit: ${CI_COMMIT_SHA}"
       - "echo Author: ${CI_COMMIT_AUTHOR}"
 
+  # 🔍 Step 2: Verify SSH key is loaded & valid (v2-compatible)
   - name: verify-ssh-key
     image: alpine:latest
-    secrets:
-      - ssh_private_key
+    environment:
+      SSH_PRIVATE_KEY:
+        from_secret: ssh_private_key
     commands:
       - "apk add --no-cache openssh"
       - "echo 🔍 Checking SSH key injection..."
-      - 'test -n "$ssh_private_key" && echo "✅ SSH key is present" || echo "❌ SSH key is EMPTY"'
+      - 'test -n "$SSH_PRIVATE_KEY" && echo "✅ SSH key is present" || echo "❌ SSH key is EMPTY"'
       - "echo 🔍 Validating SSH private key format..."
-      - 'echo "$ssh_private_key" | ssh-keygen -lf - || echo "❌ Invalid or corrupted SSH key"'
+      - 'echo "$SSH_PRIVATE_KEY" | ssh-keygen -lf - || echo "❌ Invalid or corrupted SSH key"'
       - "echo 🔍 First line of key:"
-      - 'echo "$ssh_private_key" | sed -n "1p" | cat -A'
+      - 'echo "$SSH_PRIVATE_KEY" | sed -n "1p" | cat -A'
       - "echo 🔍 Last line of key:"
-      - 'echo "$ssh_private_key" | sed -n "$p" | cat -A'
+      - 'echo "$SSH_PRIVATE_KEY" | sed -n "$p" | cat -A'
 
+  # 🚀 Step 3: Deploy to Oracle Cloud Server
   - name: deploy
     image: appleboy/drone-ssh
     settings:
@@ -41,6 +45,7 @@ steps:
         - "chmod +x run.sh"
         - "./run.sh radio-main"
 
+  # 🏥 Step 4: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
@@ -48,6 +53,7 @@ steps:
       - "echo 🏥 Performing health check..."
       - "curl -f http://140.238.251.85:9126/ || echo ⚠️ Service not responding yet"
 
+  # ✅ Step 5: Success notification
   - name: notify-success
     image: alpine:latest
     commands:
@@ -56,6 +62,7 @@ steps:
     when:
       status: success
 
+  # ❌ Step 6: Failure notification
   - name: notify-failure
     image: alpine:latest
     commands:
