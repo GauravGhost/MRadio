@@ -42,14 +42,11 @@ steps:
   # Step 4: Success notification to Gotify
   - name: notify-success
     image: curlimages/curl:latest
-    environment:
-      GOTIFY_URL:
-        from_secret: gotify_url
-      GOTIFY_TOKEN:
-        from_secret: gotify_token
     commands:
       - |
-        curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
+        export GOTIFY_URL_VAL=$(echo "${GOTIFY_URL}")
+        export GOTIFY_TOKEN_VAL=$(echo "${GOTIFY_TOKEN}")
+        curl -X POST "$${GOTIFY_URL_VAL}/message?token=$${GOTIFY_TOKEN_VAL}" \
         -F "title=✅ MRadio Deployment Success" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
@@ -57,21 +54,23 @@ steps:
         
         🎵 MRadio is now live at https://icecast.mity.in/radio.mp3" \
         -F "priority=5"
+    environment:
+      GOTIFY_URL:
+        from_secret: gotify_url
+      GOTIFY_TOKEN:
+        from_secret: gotify_token
     when:
       status: success
 
   # Step 5: Failure notification to Gotify
   - name: notify-failure
     image: curlimages/curl:latest
-    environment:
-      GOTIFY_URL:
-        from_secret: gotify_url
-      GOTIFY_TOKEN:
-        from_secret: gotify_token
     commands:
       - |
         echo "Sending failure notification to Gotify..."
-        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
+        export GOTIFY_URL_VAL=$(echo "${GOTIFY_URL}")
+        export GOTIFY_TOKEN_VAL=$(echo "${GOTIFY_TOKEN}")
+        curl -X POST "$${GOTIFY_URL_VAL}/message?token=$${GOTIFY_TOKEN_VAL}" \
         -F "title=❌ MRadio Deployment Failed" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
@@ -79,5 +78,10 @@ steps:
         
         Pipeline failed. Please check logs." \
         -F "priority=10"
+    environment:
+      GOTIFY_URL:
+        from_secret: gotify_url
+      GOTIFY_TOKEN:
+        from_secret: gotify_token
     when:
       status: failure
