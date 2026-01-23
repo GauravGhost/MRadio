@@ -68,6 +68,8 @@ steps:
         from_secret: gotify_url
       GOTIFY_TOKEN:
         from_secret: gotify_token
+      HOST:
+        from_secret: host
     commands:
       - |
         echo "Sending failure notification to Gotify..."
