@@ -73,12 +73,15 @@ steps:
     commands:
       - |
         echo "Sending failure notification to Gotify..."
-        echo "${GOTIFY_URL} | ${GOTIFY_TOKEN} } ${host}"
+        echo "URL: ${GOTIFY_URL}"
+        echo "Token: ${GOTIFY_TOKEN}"
+        echo "Host: ${HOST}"
         curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
         -F "title=❌ MRadio Deployment Failed" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
         Author: ${CI_COMMIT_AUTHOR}
+        Host: ${HOST}
         
         Pipeline failed. Please check logs." \
         -F "priority=10"
