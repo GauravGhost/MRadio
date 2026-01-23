@@ -68,20 +68,14 @@ steps:
         from_secret: gotify_url
       GOTIFY_TOKEN:
         from_secret: gotify_token
-      HOST:
-        from_secret: host
     commands:
       - |
         echo "Sending failure notification to Gotify..."
-        echo "URL: $${GOTIFY_URL}"
-        echo "Token: $${GOTIFY_TOKEN}"
-        echo "Host: $${HOST}"
-        curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
+        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
         -F "title=❌ MRadio Deployment Failed" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
         Author: ${CI_COMMIT_AUTHOR}
-        Host: ${HOST}
         
         Pipeline failed. Please check logs." \
         -F "priority=10"
