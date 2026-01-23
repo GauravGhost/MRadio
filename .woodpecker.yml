@@ -73,9 +73,9 @@ steps:
     commands:
       - |
         echo "Sending failure notification to Gotify..."
-        echo "URL: ${GOTIFY_URL}"
-        echo "Token: ${GOTIFY_TOKEN}"
-        echo "Host: ${HOST}"
+        echo "URL: $${GOTIFY_URL}"
+        echo "Token: $${GOTIFY_TOKEN}"
+        echo "Host: $${HOST}"
         curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
         -F "title=❌ MRadio Deployment Failed" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
