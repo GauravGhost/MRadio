@@ -44,9 +44,8 @@ steps:
     image: curlimages/curl:latest
     commands:
       - |
-        export GOTIFY_URL_VAL=$(echo "${GOTIFY_URL}")
-        export GOTIFY_TOKEN_VAL=$(echo "${GOTIFY_TOKEN}")
-        curl -X POST "$${GOTIFY_URL_VAL}/message?token=$${GOTIFY_TOKEN_VAL}" \
+        echo "Sending success notification to Gotify..."
+        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
         -F "title=✅ MRadio Deployment Success" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
@@ -68,9 +67,7 @@ steps:
     commands:
       - |
         echo "Sending failure notification to Gotify..."
-        export GOTIFY_URL_VAL=$(echo "${GOTIFY_URL}")
-        export GOTIFY_TOKEN_VAL=$(echo "${GOTIFY_TOKEN}")
-        curl -X POST "$${GOTIFY_URL_VAL}/message?token=$${GOTIFY_TOKEN_VAL}" \
+        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
         -F "title=❌ MRadio Deployment Failed" \
         -F "message=Branch: ${CI_COMMIT_BRANCH}
         Commit: ${CI_COMMIT_SHA:0:7}
