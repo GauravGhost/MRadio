@@ -31,7 +31,7 @@ steps:
         - "chmod +x run.sh"
         - "./run.sh radio-main"
 
-  # Step 4: Health check
+  # Step 3: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
@@ -39,20 +39,44 @@ steps:
       - "echo 🏥 Performing health check..."
       - "curl -f https://radio.mity.in/ || echo ⚠️ Service not responding yet"
 
-  # Step 5: Success notification
+  # Step 4: Success notification to Gotify
   - name: notify-success
-    image: alpine:latest
+    image: curlimages/curl:latest
+    environment:
+      GOTIFY_URL:
+        from_secret: gotify_url
+      GOTIFY_TOKEN:
+        from_secret: gotify_token
     commands:
-      - "echo ✅ Deployment successful!"
-      - "echo 🎵 MRadio is now live at https://icecast.mity.in/radio.mp3"
+      - |
+        curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
+        -F "title=✅ MRadio Deployment Success" \
+        -F "message=Branch: ${CI_COMMIT_BRANCH}
+        Commit: ${CI_COMMIT_SHA:0:7}
+        Author: ${CI_COMMIT_AUTHOR}
+        
+        🎵 MRadio is now live at https://icecast.mity.in/radio.mp3" \
+        -F "priority=5"
     when:
       status: success
 
-  # Step 6: Failure notification
+  # Step 5: Failure notification to Gotify
   - name: notify-failure
-    image: alpine:latest
+    image: curlimages/curl:latest
+    environment:
+      GOTIFY_URL:
+        from_secret: gotify_url
+      GOTIFY_TOKEN:
+        from_secret: gotify_token
     commands:
-      - "echo ❌ Deployment failed!"
-      - "echo Please check the logs above for errors"
+      - |
+        curl -X POST "${GOTIFY_URL}/message?token=${GOTIFY_TOKEN}" \
+        -F "title=❌ MRadio Deployment Failed" \
+        -F "message=Branch: ${CI_COMMIT_BRANCH}
+        Commit: ${CI_COMMIT_SHA:0:7}
+        Author: ${CI_COMMIT_AUTHOR}
+        
+        Pipeline failed. Please check logs." \
+        -F "priority=10"
     when:
       status: failure
