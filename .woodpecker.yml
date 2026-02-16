@@ -17,13 +17,13 @@ steps:
     image: appleboy/drone-ssh
     settings:
       host: 
-        from_secret: host
+        from_secret: ORACLE_HOST
       username: 
-        from_secret: username
+        from_secret: ORACLE_USERNAME
       key:
-        from_secret: ssh_private_key
+        from_secret: ORACLE_KEY
       port:
-        from_secret: port
+        from_secret: ORACLE_PORT
       command_timeout: 5m
       script:
         - "echo Connected to Oracle Cloud server"
