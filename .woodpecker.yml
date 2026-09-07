@@ -1,6 +1,8 @@
 when:
   branch: master
-  event: push
+  event:
+    - push
+    - manual
 
 steps:
   # Step 1: Build notification
@@ -28,16 +30,17 @@ steps:
       script:
         - "echo Connected to Oracle Cloud server"
         - "cd /home/ubuntu/docker/radio"
+        - "git fetch origin master && git reset --hard origin/master"
         - "chmod +x run.sh"
-        - "./run.sh radio-main"
+        - "./run.sh"
 
   # Step 3: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
-      - "sleep 10"
+      - "sleep 12"
       - "echo 🏥 Performing health check..."
-      - "curl -f https://radio.mity.in/ || echo ⚠️ Service not responding yet"
+      - "curl -fsS https://radio.mity.in/api/health"
 
   # Step 4: Success notification to Gotify
   - name: notify-success
