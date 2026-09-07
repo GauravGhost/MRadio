@@ -1,4 +1,4 @@
-import queue from "../lib/queue.js";
+import channelManager from "../lib/channelManager.js";
 import { generate256BitToken } from "../utils/crypto.js";
 import SongQueueManager from "../utils/queue/songQueueManager.js";
 import TokenManager from "../utils/queue/tokenManager.js";
@@ -18,27 +18,50 @@ class Service {
 
     /**
     * ==========================================
-    * Songs Related Services
+    * Channel Management Services
     * ==========================================
     */
 
-    async getCurrentSong() {
-        const { title, duration, requestedBy } = queue.tracks[queue.index];
-        const formattedDuration = durationFormatter(duration);
-        return { title, duration: formattedDuration, requestedBy }
+    async getAllChannels() {
+        return channelManager.getAllChannels();
     }
 
-    async seekSong(seconds) {
-        await queue.seek(seconds);
+    async createChannel(data) {
+        return channelManager.createChannel(data);
+    }
+
+    async deleteChannel(id) {
+        return channelManager.deleteChannel(id);
+    }
+
+    /**
+    * ==========================================
+    * Songs Related Services (Multi-Channel Capable)
+    * ==========================================
+    */
+
+    async getCurrentSong(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        if (!ch.currentTrack) {
+            return { title: "No Track Playing", duration: "00:00", requestedBy: "system" };
+        }
+        const { title, duration, requestedBy } = ch.currentTrack;
+        const formattedDuration = durationFormatter(duration);
+        return { title, duration: formattedDuration, requestedBy };
+    }
+
+    async seekSong(seconds, channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        await ch.seek(seconds);
         return true;
     }
 
-    async getQueueList() {
+    async getQueueList(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
         const songQueue = new SongQueueManager();
-        const trackList = queue.tracks;
+        const trackList = ch.tracks;
         const queueSongList = songQueue.printQueue();
 
-        // Format durations for both current tracks and queued songs
         const response = [...trackList, ...queueSongList].map((item, index) => {
             const formattedDuration = durationFormatter(item?.duration);
             return {
@@ -51,28 +74,29 @@ class Service {
         return response;
     }
 
-    async getUpcomingSong() {
-        const { title, duration, requestedBy } = queue.tracks[(queue.index + 1) % queue.tracks.length];
+    async getUpcomingSong(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        if (ch.tracks.length <= 1) {
+            return { title: "None", duration: "00:00", requestedBy: "system" };
+        }
+        const { title, duration, requestedBy } = ch.tracks[(ch.index + 1) % ch.tracks.length];
         const formattedDuration = durationFormatter(duration);
-        logger.info('Upcoming song duration:', {
-            title,
-            originalDuration: duration,
-            formattedDuration
-        });
-        return { title, duration: formattedDuration, requestedBy }
+        return { title, duration: formattedDuration, requestedBy };
     }
 
-    async skip() {
-        await queue.skip();
+    async skip(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        await ch.skip();
         return true;
     }
 
-    async previous() {
-        await queue.previous();
+    async previous(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        await ch.previous();
         return true;
     }
 
-    async addSongToQueue({ songName, requestedBy = "anonymous", force, preference }) {
+    async addSongToQueue({ songName, requestedBy = "anonymous", force, preference, channelId = 'default' }) {
         const metadata = await generateSongMetadata(songName, requestedBy, force, preference);
         const isBlocked = await this.isSongBlocked(metadata.title);
         if (isBlocked) {
@@ -83,27 +107,27 @@ class Service {
         return { title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
-    async addPlaylistToQueue({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous" }) {
-        const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy)
+    async addPlaylistToQueue({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId = 'default' }) {
+        const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
         }
         const songQueue = new SongQueueManager();
         songQueue.addManyToQueue(metadata);
-        return { added: true, total: metadata.length }
+        return { added: true, total: metadata.length };
     }
 
-    async addPlaylistToTop({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous" }) {
-        const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy)
+    async addPlaylistToTop({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId = 'default' }) {
+        const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
         }
         const songQueue = new SongQueueManager();
         songQueue.addManyToTop(metadata);
-        return { added: true, total: metadata.length }
+        return { added: true, total: metadata.length };
     }
 
-    async addSongToTop({ songName, requestedBy = "anonymous" }) {
+    async addSongToTop({ songName, requestedBy = "anonymous", channelId = 'default' }) {
         const metadata = await generateSongMetadata(songName, requestedBy);
         const isBlocked = await this.isSongBlocked(metadata.title);
         if (isBlocked) {
@@ -140,29 +164,9 @@ class Service {
         return { title: removedItem.title, duration: removedItem.duration, requestedBy: removedItem.requestedBy };
     }
 
-    async addSongToQueueFromSource({ url, videoId, requestedBy = "anonymous", source = "youtube" }) {
-        const yts = new Yts();
-        const { status, message } = await yts.validateVideo(url);
-
-        if (!status) {
-            throw new Error(message);
-        }
-        const songDetail = await yts.getVideoDetailByUrl(videoId);
-        const metadata = {
-            requestedBy: requestedBy,
-            title: songDetail?.title,
-            duration: songDetail?.duration.timestamp,
-            url: songDetail?.url,
-            urlType: "youtube"
-        };
-        const songQueue = new SongQueueManager();
-        songQueue.addToQueue(metadata);
-        return { title: metadata.title, duration: metadata.duration, requestedBy };
-    }
-
     /**
      * ==========================================
-     * Administrated Related Services
+     * Admin Related Services
      * ==========================================
      */
     async generateToken(username) {
@@ -174,12 +178,12 @@ class Service {
 
     /**
      * ==========================================
-     * Block List of songs Related Services
+     * Block List Services
      * ==========================================
      */
-    async blockCurrentSong(requestedBy = "anonymous") {
+    async blockCurrentSong(requestedBy = "anonymous", channelId = 'default') {
         try {
-            const songDetail = await this.getCurrentSong();
+            const songDetail = await this.getCurrentSong(channelId);
             return await this.blockListManager.blockCurrentSong(songDetail.title, requestedBy);
         } catch (error) {
             logger.error("Error in blockCurrentSong service:", { error });
@@ -248,7 +252,7 @@ class Service {
     */
     async addDefaultPlaylist({ playlistId, title, source, requestedBy = "auto", isActive = true, genre = "mix" }) {
         try {
-            const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy)
+            const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
             if (metadata.length <= 0) {
                 throw new Error("No songs found in the playlist.");
             }
@@ -260,16 +264,16 @@ class Service {
                 metadataUpdatedAt: new Date(),
                 isActive: isActive,
                 genre: genre
-            })
+            });
             const metadataStore = new DefaultPlaylistMetadataManager();
             const updatedMetadata = metadata.map(data => ({ ...data, playlistId: playlistId }));
             metadataStore.addMany(updatedMetadata);
-            return { added: true, total: metadata.length }
+            return { added: true, total: metadata.length };
         } catch (error) {
             logger.error("Error in addDefaultPlaylist service:", { error });
             throw error;
         }
-    };
+    }
 
     async removeDefaultPlaylist({ index }) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
@@ -297,25 +301,23 @@ class Service {
         }
 
         return removedPlaylist;
-    };
+    }
 
     async getDefaultPlaylist() {
         const defaultPlaylistStore = new DefaultPlaylistManager();
         return defaultPlaylistStore.getAll();
-    };
+    }
 
     async updatePlaylistStatus({ index, isActive }) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
         const allPlaylists = defaultPlaylistStore.getAll();
         
-        // Convert to 0-based index
         const actualIndex = index - 1;
         
         if (actualIndex < 0 || actualIndex >= allPlaylists.length) {
             throw new Error("Invalid playlist index");
         }
 
-        // Check if setting this playlist to inactive would leave no active playlists
         if (!isActive) {
             const activePlaylistCount = allPlaylists.filter((playlist, idx) => 
                 idx !== actualIndex && playlist.isActive
@@ -326,13 +328,11 @@ class Service {
             }
         }
 
-        // Create updated playlist object
         const updatedPlaylist = {
             ...allPlaylists[actualIndex],
             isActive: isActive
         };
 
-        // Remove old playlist and add updated one
         defaultPlaylistStore.removeAtIndex(index);
         defaultPlaylistStore.add(updatedPlaylist);
 

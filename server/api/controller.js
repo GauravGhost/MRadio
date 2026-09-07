@@ -5,70 +5,104 @@ import commonConfigService from "../services/commonConfigService.js";
 
 const service = new Service();
 
+export const getAllChannels = async (req, res) => {
+    try {
+        const response = await service.getAllChannels();
+        res.status(200).json(successRes(response, "Channels list"));
+    } catch (error) {
+        logger.error("Error in getAllChannels API", { error });
+        res.status(400).json(errorRes({ message: error.message }, "Error fetching channels"));
+    }
+};
+
+export const createChannel = async (req, res) => {
+    try {
+        const response = await service.createChannel(req.body);
+        res.status(201).json(successRes(response, "Channel created successfully"));
+    } catch (error) {
+        logger.error("Error in createChannel API", { error });
+        res.status(400).json(errorRes({ message: error.message }, "Error creating channel"));
+    }
+};
+
+export const deleteChannel = async (req, res) => {
+    try {
+        const response = await service.deleteChannel(req.params.channelId);
+        res.status(200).json(successRes(response, "Channel deleted successfully"));
+    } catch (error) {
+        logger.error("Error in deleteChannel API", { error });
+        res.status(400).json(errorRes({ message: error.message }, "Error deleting channel"));
+    }
+};
+
 export const skip = async (req, res) => {
     try {
-        await service.skip();
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        await service.skip(channelId);
         res.status(200).json(successRes({ skip: true }, "\nSkip Successful\nPlaying next song..."));
     } catch (error) {
         logger.error("Error in skip API", { error });
         logger.error("Failed to skip song after response sent:", { error });
     }
-}
+};
 
 export const getCurrentSong = async (req, res) => {
     try {
-        const response = await service.getCurrentSong();
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        const response = await service.getCurrentSong(channelId);
         res.status(200).json(successRes(response, "Current Song"));
     } catch (error) {
         logger.error("Error in get Current Song API", { error });
         res.status(400).json(errorRes({ message: error.message }, "Current Song Error"));
     }
-}
+};
 
 export const previousSong = async (req, res) => {
     try {
-        const response = await service.previous();
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        const response = await service.previous(channelId);
         res.status(200).json(successRes(response, "Previous Song"));
     } catch (error) {
         logger.error("Error in Previous Song API", { error });
-        res.status(400).json(errorRes({ message: error.message }, "Previous song error"))
-
+        res.status(400).json(errorRes({ message: error.message }, "Previous song error"));
     }
-}
+};
 
 export const seekSong = async (req, res) => {
     try {
         if (!req.params.seconds || isNaN(+req.params.seconds)) {
             throw new Error("Invalid seek time");
         }
-        const response = await service.seekSong(parseInt(req.params.seconds));
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        const response = await service.seekSong(parseInt(req.params.seconds), channelId);
         res.status(200).json(successRes(response, "Seek Song"));
     } catch (error) {
-        logger.error("Error in Seeking Song API", { error })
+        logger.error("Error in Seeking Song API", { error });
         res.status(400).json(errorRes({ message: error.message }, "Seek Song error"));
     }
-}
+};
 
 export const getUpcomingSong = async (req, res) => {
     try {
-        const response = await service.getUpcomingSong();
-        logger.info("Upcoming Song api")
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        const response = await service.getUpcomingSong(channelId);
         res.status(200).json(successRes(response, "Successfully Fetched upcoming Song"));
     } catch (error) {
         logger.error("Error in Get Upcoming Song API", { error });
         res.status(400).json(errorRes({ message: error.message }, "Upcoming Song Error"));
     }
-}
+};
 
 export const getQueueList = async (req, res) => {
     try {
-        const response = await service.getQueueList();
+        const channelId = req.params.channelId || req.query.channelId || 'default';
+        const response = await service.getQueueList(channelId);
         res.status(200).json(successRes(response, "Successfully Fetched Queue List"));
     } catch (error) {
         logger.error("Error in Get Song Queue List API", { error });
         res.status(400).json(errorRes({ message: error.message }, "Queue List Error"));
     }
-}
+};
 
 export const addSongToQueue = async (req, res) => {
     try {

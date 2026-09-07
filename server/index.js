@@ -1,16 +1,14 @@
 import express from "express";
 import http from "http";
 import socketManager from "./lib/socketManager.js";
-import queue from "./lib/queue.js";
+import channelManager from "./lib/channelManager.js";
 import router from "./api/router.js";
-import { DEFAULT_TRACKS_LOCATION } from "./utils/constant.js";
 import Initializer from "./services/initializer.js";
 import secret from "./utils/secret.js";
 import logger from "./utils/logger.js";
 
 const PORT = 9126;
 const app = express();
-
 const server = http.createServer(app);
 
 app.use(express.json());
@@ -20,10 +18,15 @@ app.get("/", function (req, res) {
 });
 
 (async () => {
-    // Initialize Initial Data
+    // 1. Initialize Initial Data
     await Initializer.init();
 
-    // Initialize Icecast streaming if configured
+    // 2. Initialize Channel Manager & Default/Persisted Channels
+    await channelManager.init();
+
+    const defaultChannel = channelManager.getChannel('default');
+
+    // 3. Initialize Icecast streaming for default channel if configured
     const icecastConfig = {
         host: secret.ICECAST_HOST,
         port: secret.ICECAST_PORT,
@@ -36,28 +39,25 @@ app.get("/", function (req, res) {
     };
 
     if (icecastConfig.host && icecastConfig.port && icecastConfig.password) {
-        const icecastInitialized = queue.initializeIcecast(icecastConfig);
+        const icecastInitialized = defaultChannel.initializeIcecast(icecastConfig);
         if (icecastInitialized) {
-            logger.info('Icecast streaming enabled');
+            logger.info('Icecast streaming enabled on default channel');
             logger.info(`Stream will be available at: http://${icecastConfig.host}:${icecastConfig.port}${icecastConfig.mount}`);
         } else {
             logger.warn('Failed to initialize Icecast streaming, falling back to direct HTTP streaming');
         }
-    } else {
-        logger.info('Icecast configuration not found in .env, using direct HTTP streaming only');
     }
 
-    // Load Initial Track
-    await queue.loadTracks(DEFAULT_TRACKS_LOCATION);
-    queue.play();
+    // 4. Initialize socket.io with default channel
+    socketManager.initialize(server, defaultChannel);
 
-    // Initialize socket.io with queue for streaming
-    socketManager.initialize(server, queue);
+    // 5. Mount API Routes
     app.use("/api", router);
-    
-    // HTTP stream for music (kept as fallback/direct access)
-    app.get("/stream", (req, res) => {
-        const { id, client } = queue.addClient();
+
+    // 6. Direct HTTP Audio Stream Handler (Single-Port Multi-Channel)
+    const handleChannelStream = (req, res, channelId = 'default') => {
+        const targetChannel = channelManager.getChannel(channelId);
+        const { id, client } = targetChannel.addClient();
 
         res.set({
             "Content-Type": "audio/mp3",
@@ -67,22 +67,26 @@ app.get("/", function (req, res) {
         client.pipe(res);
 
         req.on("close", () => {
-            queue.removeClient(id);
+            targetChannel.removeClient(id);
         });
-    });
+    };
+
+    // Default channel stream
+    app.get("/stream", (req, res) => handleChannelStream(req, res, 'default'));
+
+    // Named channel stream (e.g. /stream/lofi, /stream/pop)
+    app.get("/stream/:channelId", (req, res) => handleChannelStream(req, res, req.params.channelId));
 
     // Icecast status endpoint
     app.get("/api/icecast/status", (req, res) => {
-        const status = queue.getIcecastStatus();
+        const status = defaultChannel.getIcecastStatus();
         res.json(status);
     });
 
     server.listen(PORT, () => {
-        console.log(`Listening on port ${PORT}`);
-        if (queue.useIcecast) {
-            console.log(`Icecast stream available at: http://${icecastConfig.host}:${icecastConfig.port}${icecastConfig.mount}`);
-        }
-        console.log(`Direct HTTP stream available at: http://localhost:${PORT}/stream`);
+        console.log(`Radio Broadcast Server listening on port ${PORT}`);
+        console.log(`Default Direct Stream: http://localhost:${PORT}/stream`);
+        console.log(`Multi-Channel Endpoint: http://localhost:${PORT}/stream/:channelId`);
     });
 })();
 

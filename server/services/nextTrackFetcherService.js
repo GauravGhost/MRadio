@@ -156,7 +156,7 @@ const fetchByUrlType = async (songData) => {
  * @description Next song Fetch Logic
  * @returns 
  */
-export const fetchNextTrack = async () => {
+export const fetchNextTrack = async (channelId = 'default', genre = 'all') => {
     const songQueue = new SongQueueManager();
     let retryCount = 0;
     const MAX_RETRIES = 3;

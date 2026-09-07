@@ -1,8 +1,30 @@
 import express from 'express';
-import { addSongToQueue, getCurrentSong, getQueueList, getUpcomingSong, skip, generateToken, previousSong, blockCurrentSong, blockSongBySongName, unblockSongBySongName, unblockSongByIndex, clearBlockList, getAllBlockList, isSongBlocked, removeSongFromQueue, addSongToTop, removeLastSongRequestedByUser, addPlaylistToQueue, addPlaylistToTop, addDefaultPlaylists, getCommonConfig, createConfigOrUpdateCommonConfig, getDefaultPlaylist, removeDefaultPlaylist, updatePlaylistStatus, seekSong } from './controller.js';
+import { 
+    addSongToQueue, getCurrentSong, getQueueList, getUpcomingSong, skip, generateToken, 
+    previousSong, blockCurrentSong, blockSongBySongName, unblockSongBySongName, unblockSongByIndex, 
+    clearBlockList, getAllBlockList, isSongBlocked, removeSongFromQueue, addSongToTop, 
+    removeLastSongRequestedByUser, addPlaylistToQueue, addPlaylistToTop, addDefaultPlaylists, 
+    getCommonConfig, createConfigOrUpdateCommonConfig, getDefaultPlaylist, removeDefaultPlaylist, 
+    updatePlaylistStatus, seekSong, getAllChannels, createChannel, deleteChannel 
+} from './controller.js';
 import { isAdmin, isValidUser } from './middleware.js';
+
 const router = express.Router();
 
+// Channel Management Routes
+router.get("/channels", getAllChannels);
+router.post("/channels", isValidUser, createChannel);
+router.delete("/channels/:channelId", isValidUser, deleteChannel);
+
+// Channel-Specific Song Routes
+router.get("/channels/:channelId/songs/current", getCurrentSong);
+router.get("/channels/:channelId/songs/queue", getQueueList);
+router.get("/channels/:channelId/songs/upcoming", getUpcomingSong);
+router.get("/channels/:channelId/songs/skip", isValidUser, skip);
+router.get("/channels/:channelId/songs/seek/:seconds", isValidUser, seekSong);
+router.get("/channels/:channelId/songs/previous", isValidUser, previousSong);
+
+// Global / Default Channel Song Routes (Backward Compatible)
 router.post("/songs/add", addSongToQueue);
 router.get("/songs/queue", getQueueList);
 router.get("/songs/current", getCurrentSong);

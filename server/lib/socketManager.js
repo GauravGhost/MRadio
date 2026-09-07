@@ -67,6 +67,12 @@ class SocketManager {
                 this.connectedClients.delete(socket.id);
             });
 
+            socket.on('joinChannel', (channelId = 'default') => {
+                const room = `channel:${channelId}`;
+                socket.join(room);
+                console.log(`Socket ${socket.id} joined ${room}`);
+            });
+
             socket.on('reconnect', () => {
                 console.log('Client reconnected:', socket.id);
                 this.connectedClients.set(socket.id, {
