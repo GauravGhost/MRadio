@@ -77,6 +77,9 @@ app.get("/", function (req, res) {
     // Named channel stream (e.g. /stream/lofi, /stream/pop)
     app.get("/stream/:channelId", (req, res) => handleChannelStream(req, res, req.params.channelId));
 
+    // API channel stream alias
+    app.get("/api/channels/:channelId/stream", (req, res) => handleChannelStream(req, res, req.params.channelId));
+
 
     server.listen(PORT, () => {
         console.log(`Radio Broadcast Server listening on port ${PORT}`);

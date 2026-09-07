@@ -238,6 +238,12 @@ export class Channel {
         return this.tracks;
     }
 
+    clearQueue() {
+        this.tracks = [];
+        logger.info(`[Channel:${this.id}] Cleared queue`);
+        return true;
+    }
+
     async loadTracks(dir) {
         try {
             this.tracks = [];
@@ -410,6 +416,18 @@ export class Channel {
         if (!this.started() || this.playing) return;
         logger.info(`[Channel:${this.id}] Resumed`);
         this.play(false);
+    }
+
+    async restart() {
+        logger.info(`[Channel:${this.id}] Restarting channel stream`);
+        await this.cleanupCurrentStream();
+        if (this.tracks.length > 0) {
+            await this.play(true);
+        } else {
+            await this.ensureQueueSize();
+            await this.play(true);
+        }
+        return true;
     }
 
     started() {

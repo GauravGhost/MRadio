@@ -119,6 +119,23 @@ class ChannelManager {
         return { deleted: true, id };
     }
 
+    async updateChannel(id, { name, genre }) {
+        const channel = this.channels.get(id);
+        if (!channel) throw new Error(`Channel '${id}' not found`);
+        if (name) channel.name = name;
+        if (genre) channel.genre = genre;
+        this.saveChannelsToDisk();
+        logger.info(`[ChannelManager] Updated channel: ${id}`);
+        return channel.getStatus();
+    }
+
+    async restartChannel(id) {
+        const channel = this.channels.get(id);
+        if (!channel) throw new Error(`Channel '${id}' not found`);
+        await channel.restart();
+        return channel.getStatus();
+    }
+
     getAllChannels() {
         const result = [];
         for (const ch of this.channels.values()) {

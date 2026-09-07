@@ -33,6 +33,14 @@ class Service {
         return channelManager.deleteChannel(id);
     }
 
+    async updateChannel(id, { name, genre }) {
+        return channelManager.updateChannel(id, { name, genre });
+    }
+
+    async restartChannel(id) {
+        return channelManager.restartChannel(id);
+    }
+
     /**
      * ==========================================
      * Playback & Track Services (Multi-Channel Capable)
@@ -75,6 +83,18 @@ class Service {
         const ch = channelManager.getChannel(channelId);
         await ch.previous();
         return true;
+    }
+
+    async pauseSong(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        ch.pause();
+        return ch.getStatus();
+    }
+
+    async resumeSong(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        ch.resume();
+        return ch.getStatus();
     }
 
     /**
@@ -168,6 +188,12 @@ class Service {
         return { channelId, title: removedItem.title, duration: removedItem.duration, requestedBy: removedItem.requestedBy };
     }
 
+    async clearQueue(channelId = 'default') {
+        const ch = channelManager.getChannel(channelId);
+        ch.clearQueue();
+        return { cleared: true, channelId };
+    }
+
     /**
      * ==========================================
      * Admin & Token Services
@@ -179,6 +205,20 @@ class Service {
         const tokenManager = new TokenManager();
         tokenManager.addToken({ token, username });
         return { token, username };
+    }
+
+    async getAllTokens() {
+        const tokenManager = new TokenManager();
+        return tokenManager.printQueue();
+    }
+
+    async removeTokenByIndex(index) {
+        const tokenManager = new TokenManager();
+        const removed = tokenManager.removeTokenByIndex(index);
+        if (!removed) {
+            throw new Error("Failed to remove token: Invalid index or queue is empty");
+        }
+        return removed;
     }
 
     /**

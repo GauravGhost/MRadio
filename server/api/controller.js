@@ -63,6 +63,31 @@ export const deleteChannel = async (req, res) => {
     }
 };
 
+export const updateChannel = async (req, res) => {
+    try {
+        const { channelId } = req.params;
+        if (!channelId) {
+            return res.status(400).json(errorRes(null, "Channel ID is required", "BAD_REQUEST"));
+        }
+        const response = await service.updateChannel(channelId, req.body || {});
+        res.status(200).json(successRes(response, "Channel updated successfully"));
+    } catch (error) {
+        logger.error("Error in updateChannel API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to update channel", "BAD_REQUEST"));
+    }
+};
+
+export const restartChannel = async (req, res) => {
+    try {
+        const { channelId } = req.params;
+        const response = await service.restartChannel(channelId || 'default');
+        res.status(200).json(successRes(response, "Channel playback restarted successfully"));
+    } catch (error) {
+        logger.error("Error in restartChannel API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to restart channel", "BAD_REQUEST"));
+    }
+};
+
 /**
  * ==========================================
  * Playback Controllers (Channel Scoped)
@@ -125,6 +150,28 @@ export const seekSong = async (req, res) => {
     } catch (error) {
         logger.error("Error in seekSong API", { error: error.message });
         res.status(400).json(errorRes(error, "Failed to seek song", "BAD_REQUEST"));
+    }
+};
+
+export const pauseSong = async (req, res) => {
+    try {
+        const channelId = req.params.channelId || 'default';
+        const response = await service.pauseSong(channelId);
+        res.status(200).json(successRes(response, "Playback paused successfully"));
+    } catch (error) {
+        logger.error("Error in pauseSong API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to pause playback", "BAD_REQUEST"));
+    }
+};
+
+export const resumeSong = async (req, res) => {
+    try {
+        const channelId = req.params.channelId || 'default';
+        const response = await service.resumeSong(channelId);
+        res.status(200).json(successRes(response, "Playback resumed successfully"));
+    } catch (error) {
+        logger.error("Error in resumeSong API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to resume playback", "BAD_REQUEST"));
     }
 };
 
@@ -208,6 +255,17 @@ export const addPlaylistToQueue = async (req, res) => {
     } catch (error) {
         logger.error("Error in addPlaylistToQueue API", { error: error.message });
         res.status(400).json(errorRes(error, "Failed to add playlist to queue", "BAD_REQUEST"));
+    }
+};
+
+export const clearQueue = async (req, res) => {
+    try {
+        const channelId = req.params.channelId || 'default';
+        const response = await service.clearQueue(channelId);
+        res.status(200).json(successRes(response, "Channel queue cleared successfully"));
+    } catch (error) {
+        logger.error("Error in clearQueue API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to clear channel queue", "BAD_REQUEST"));
     }
 };
 
@@ -394,6 +452,30 @@ export const generateToken = async (req, res) => {
     } catch (error) {
         logger.error("Error in generateToken API", { error: error.message });
         res.status(400).json(errorRes(error, "Failed to generate token", "BAD_REQUEST"));
+    }
+};
+
+export const getAllTokens = async (req, res) => {
+    try {
+        const response = await service.getAllTokens();
+        res.status(200).json(successRes(response, "Admin tokens fetched successfully"));
+    } catch (error) {
+        logger.error("Error in getAllTokens API", { error: error.message });
+        res.status(500).json(errorRes(error, "Failed to fetch tokens", "INTERNAL_SERVER_ERROR"));
+    }
+};
+
+export const removeTokenByIndex = async (req, res) => {
+    try {
+        const { index } = req.params;
+        if (!index || isNaN(+index)) {
+            return res.status(400).json(errorRes(null, "Valid token index parameter is required", "BAD_REQUEST"));
+        }
+        const response = await service.removeTokenByIndex(parseInt(index));
+        res.status(200).json(successRes(response, "Token revoked successfully"));
+    } catch (error) {
+        logger.error("Error in removeTokenByIndex API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to revoke token", "BAD_REQUEST"));
     }
 };
 
