@@ -32,7 +32,7 @@ steps:
         - "cd /home/ubuntu/docker/radio"
         - "git fetch origin master && git reset --hard origin/master"
         - "chmod +x run.sh"
-        - "./run.sh"
+        - "bash run.sh"
 
   # Step 3: Health check
   - name: health-check
