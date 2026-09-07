@@ -14,9 +14,9 @@ export const DEFAULT_PLAYLIST_LOCATION = "data/defaultSongPlaylist.json";
 export const DEFAULT_PLAYLIST_METADATA_LOCATION = "data/defaultPlaylistMetadata.json";
 export const COMMON_CONFIG_LOCATION = "data/commonConfig.json";
 
-export const DEFAULT_QUEUE_SIZE = 2;
+export const DEFAULT_QUEUE_SIZE = process.env.QUEUE_BUFFER_SIZE ? parseInt(process.env.QUEUE_BUFFER_SIZE, 10) : 2;
 export const SONG_METADATA_UPDATE_TIME = 2 * 24 * 60 * 60 * 1000; // 2 days
-export const CACHE_SIZE = 1024 * 1024 * 1024;
+export const CACHE_SIZE = 1024 * 1024 * 1024; // 1 GB
 
 export const COMMON_CONFIG_KEYS = {
     defaultPlaylistGenre: "defaultPlaylistGenre", // string

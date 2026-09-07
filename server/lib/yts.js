@@ -6,12 +6,13 @@ import { checkSimilarity, getCookiesPath } from '../utils/utils.js';
 class Yts {
     async getVideoDetail(name, artistName) {
         try {
-            const r = await yts({ query: `${name} - ${artistName} official audio song music`, category: 'music' });
-            if (r.videos?.length === 0) {
+            const query = artistName ? `${name} - ${artistName} official audio song music` : `${name} official audio song music`;
+            const r = await yts({ query, category: 'music' });
+            if (!r?.videos || r.videos.length === 0) {
                 return;
             }
 
-            const result = r.videos.find(track => checkSimilarity(name, track.title) > 60);
+            const result = r.videos.find(track => checkSimilarity(name, track.title) > 60) || r.videos[0];
             return result;
         } catch (error) {
             logger.error("Error getting details: " + error.message);
@@ -125,10 +126,12 @@ class Yts {
             const tags = info.tags || [];
             const isMusicCategory =
                 categories.some(cat => cat.toLowerCase().includes('music')) ||
-                tags.some(tag => tag.toLowerCase().includes('music'));
+                tags.some(tag => tag.toLowerCase().includes('music')) ||
+                Boolean(info.track || info.artist);
 
-            if (!isMusicCategory) {
-                return { status: false, message: 'Video is not in the Music category' };
+            // Allow if under 10 minutes even if YouTube uploader used another category (e.g. Entertainment)
+            if (!isMusicCategory && duration > 600) {
+                return { status: false, message: 'Video duration exceeds limits' };
             }
 
             return { 

@@ -131,8 +131,8 @@ class Service {
         return { channelId, title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
-    async addSongToTop({ songName, requestedBy = "anonymous", channelId = 'default' }) {
-        const metadata = await generateSongMetadata(songName, requestedBy);
+    async addSongToTop({ songName, requestedBy = "anonymous", force, preference, channelId = 'default' }) {
+        const metadata = await generateSongMetadata(songName, requestedBy, force, preference);
         const isBlocked = await this.isSongBlocked(metadata.title);
         if (isBlocked) {
             throw new Error("Song is blocked! You cannot play this song.");
@@ -163,11 +163,13 @@ class Service {
     }
 
     async removeFromQueue({ index, channelId = 'default' }) {
-        if (index <= DEFAULT_QUEUE_SIZE) {
-            throw new Error(`Cannot remove active tracks from positions 1 to ${DEFAULT_QUEUE_SIZE}`);
+        const ch = channelManager.getChannel(channelId);
+        const trackList = ch.tracks || [];
+        if (index <= trackList.length) {
+            throw new Error(`Cannot remove actively buffered track #${index}. Use skip to advance.`);
         }
         const songQueue = new SongQueueManager();
-        const removedItem = songQueue.removeAtIndex(index - DEFAULT_QUEUE_SIZE);
+        const removedItem = songQueue.removeAtIndex(index - trackList.length);
         if (!removedItem) {
             throw new Error("Invalid index or queue is empty.");
         }
@@ -191,6 +193,9 @@ class Service {
     async clearQueue(channelId = 'default') {
         const ch = channelManager.getChannel(channelId);
         ch.clearQueue();
+        const songQueue = new SongQueueManager();
+        songQueue.clear();
+        await ch.ensureQueueSize();
         return { cleared: true, channelId };
     }
 

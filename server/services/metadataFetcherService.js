@@ -151,44 +151,56 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
     try {
         let searchName = songName;
         
-        // If not forced, verify with Spotify first
+        // If not forced, try Spotify first to normalize track title and artist
         if (!force) {
-            const spotifyResult = await searchSpotifySong(songName);
-            if (!spotifyResult) {
-                throw new Error("Could not find song on Spotify");
+            try {
+                const spotifyResult = await searchSpotifySong(songName);
+                if (spotifyResult?.name) {
+                    searchName = spotifyResult.name;
+                }
+            } catch (err) {
+                console.warn(`[metadataFetcher] Spotify normalization skipped for "${songName}":`, err?.message);
             }
-            searchName = spotifyResult.name;
         }
 
         const metadata = createMetadata(songName, searchName, requestedBy);
 
-        // If force is true and preference is provided, search only on preferred platform
-        if (force && preference) {
+        // If preference is provided, search preferred platform first
+        if (preference) {
             switch (preference.toLowerCase()) {
                 case 'soundcloud': {
                     const soundCloudResult = await searchSoundCloudSong(searchName);
-                    if (!soundCloudResult) throw new Error("Song not found on SoundCloud");
-                    return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
+                    if (soundCloudResult) {
+                        return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
+                    }
+                    if (force) throw new Error("Song not found on SoundCloud");
+                    break;
                 }
                 
                 case 'jiosaavn': {
                     const jioSaavnResult = await searchJioSaavnSong(searchName);
-                    if (!jioSaavnResult) throw new Error("Song not found on JioSaavn");
-                    return updateMetadata(metadata, "jiosaavn", jioSaavnResult.title, jioSaavnResult.url, jioSaavnResult.duration);
+                    if (jioSaavnResult) {
+                        return updateMetadata(metadata, "jiosaavn", jioSaavnResult.title, jioSaavnResult.url, jioSaavnResult.duration);
+                    }
+                    if (force) throw new Error("Song not found on JioSaavn");
+                    break;
                 }
                 
                 case 'youtube': {
                     const youtubeResult = await searchYouTubeSong(searchName);
-                    if (!youtubeResult) throw new Error("Song not found on YouTube");
-                    return updateMetadata(metadata, "youtube", youtubeResult.title, youtubeResult.url, youtubeResult.duration);
+                    if (youtubeResult) {
+                        return updateMetadata(metadata, "youtube", youtubeResult.title, youtubeResult.url, youtubeResult.duration);
+                    }
+                    if (force) throw new Error("Song not found on YouTube");
+                    break;
                 }
                 
                 default:
-                    throw new Error("Invalid platform preference");
+                    if (force) throw new Error("Invalid platform preference");
             }
         }
 
-        // If no preference or force without preference, try all platforms
+        // Search across platforms in order
         const soundCloudResult = await searchSoundCloudSong(searchName);
         if (soundCloudResult) {
             return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
@@ -218,13 +230,25 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
 };
 
 export const searchYoutubePlaylist = async (playlistId, requestedBy) => {
+    let cleanId = String(playlistId || "").trim();
+    if (cleanId.includes("list=")) {
+        try {
+            const parsed = new URL(cleanId.startsWith("http") ? cleanId : `https://${cleanId}`);
+            cleanId = parsed.searchParams.get("list") || cleanId;
+        } catch {
+            // Keep cleanId as is
+        }
+    }
     const yts = new Yts();
-    const playlistArray = await yts.getPlaylistDetail(playlistId);
+    const playlistArray = await yts.getPlaylistDetail(cleanId);
+    if (!playlistArray || !Array.isArray(playlistArray) || playlistArray.length === 0) {
+        throw new Error("No videos found in YouTube playlist or playlist is private.");
+    }
     const playListMetadata = playlistArray
-        .filter((video) => video.duration.seconds <= 900)
+        .filter((video) => video.duration?.seconds <= 900)
         .map((video) => ({
             title: video.title,
-            duration: durationFormatter(video.duration.timestamp),
+            duration: durationFormatter(video.duration?.timestamp),
             requestedBy: requestedBy,
             url: addYoutubeVideoId(video.videoId),
             urlType: "youtube"
@@ -233,15 +257,23 @@ export const searchYoutubePlaylist = async (playlistId, requestedBy) => {
 }
 
 export const searchJioSaavnPlaylist = async (playlistId, requestedBy) => {
+    let cleanId = String(playlistId || "").trim();
+    const match = cleanId.match(/(\d{5,})/);
+    if (match) {
+        cleanId = match[1];
+    }
     const jio = new JioSaavn();
-    const playlistArray = await jio.getPlaylistDetail(playlistId);
+    const playlistArray = await jio.getPlaylistDetail(cleanId);
+    if (!playlistArray || !Array.isArray(playlistArray) || playlistArray.length === 0) {
+        throw new Error("Could not find songs in JioSaavn playlist. Please check the playlist ID or link.");
+    }
     const playlistMetadata = playlistArray
-        .filter((audio) => audio.more_info.duration <= 900)
+        .filter((audio) => (audio.more_info?.duration || 0) <= 900)
         .map((audio) => ({
             title: audio.title,
-            duration: durationFormatter(audio.more_info.duration),
+            duration: durationFormatter(audio.more_info?.duration),
             requestedBy: requestedBy,
-            url: audio.more_info.encrypted_media_url,
+            url: audio.more_info?.encrypted_media_url,
             urlType: "jiosaavn"
         }));
     return playlistMetadata;
@@ -255,13 +287,19 @@ export const searchJioSaavnPlaylist = async (playlistId, requestedBy) => {
  */
 export const generatePlaylistMetadata = async (playlistId, sourceName, requestedBy) => {
     if (!sourceName || !playlistId) {
-        throw new Error("Invalid playlist parameters");
+        throw new Error("Invalid playlist parameters: playlistId and source are required");
     }
-    switch (sourceName) {
+    const normalizedSource = String(sourceName).toLowerCase().trim();
+    switch (normalizedSource) {
         case "youtube":
             return await searchYoutubePlaylist(playlistId, requestedBy);
         case "jiosaavn":
             return await searchJioSaavnPlaylist(playlistId, requestedBy);
+        case "spotify":
+            throw new Error("Spotify playlists cannot be imported directly because Spotify API search requires an active Premium developer subscription. Please import from YouTube or JioSaavn.");
+        case "soundcloud":
+            throw new Error("SoundCloud playlists are not supported directly. Please use YouTube or JioSaavn.");
+        default:
+            throw new Error(`Unsupported playlist source "${sourceName}". Supported sources are: YouTube, JioSaavn.`);
     }
-    throw new Error("Unsupported playlist source");
 }

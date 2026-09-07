@@ -18,8 +18,8 @@ class SoundCloud {
                 return;
             }
 
-            const songData = songs.find(track => checkSimilarity(songName, track.name) > 60);
-            if(!songData){
+            const songData = songs.find(track => checkSimilarity(songName, track.name) > 60) || songs[0];
+            if (!songData) {
                 return;
             }
             const song = await this.client.getSongInfo(songData.url);
@@ -30,13 +30,13 @@ class SoundCloud {
             if (duration > 600) {
                 throw new Error("Song Duration is more than 10 minutes.");
             }
-            const url = song.streams.progressive  ?? song.trackURL
-            if(!url.includes('/stream/progressive')){
+            const streamUrl = song.streams?.progressive;
+            if (!streamUrl || !streamUrl.includes('/stream/progressive')) {
                 return;
             }
             return {
                 title: song.title,
-                url: song.trackURL ?? song.streams.progressive,
+                url: song.url || songData.url,
                 duration: duration,
             };
         } catch (error) {

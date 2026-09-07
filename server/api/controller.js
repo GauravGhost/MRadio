@@ -206,7 +206,7 @@ export const addSongToQueue = async (req, res) => {
         res.status(200).json(successRes(response, "Song added to queue successfully"));
     } catch (error) {
         logger.error("Error in addSongToQueue API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to add song to queue", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to add song to queue", "BAD_REQUEST"));
     }
 };
 
@@ -221,7 +221,7 @@ export const removeSongFromQueue = async (req, res) => {
         res.status(200).json(successRes(response, "Song removed from queue successfully"));
     } catch (error) {
         logger.error("Error in removeSongFromQueue API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to remove song from queue", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to remove song from queue", "BAD_REQUEST"));
     }
 };
 
@@ -236,7 +236,7 @@ export const removeLastSongRequestedByUser = async (req, res) => {
         res.status(200).json(successRes(response, `Removed last song requested by user @${requestedBy}`));
     } catch (error) {
         logger.error("Error in removeLastSongRequestedByUser API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to remove last user request", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to remove last user request", "BAD_REQUEST"));
     }
 };
 
@@ -254,7 +254,7 @@ export const addPlaylistToQueue = async (req, res) => {
         res.status(200).json(successRes(response, `Added ${response.total} songs to queue from playlist`));
     } catch (error) {
         logger.error("Error in addPlaylistToQueue API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to add playlist to queue", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to add playlist to queue", "BAD_REQUEST"));
     }
 };
 
@@ -265,7 +265,7 @@ export const clearQueue = async (req, res) => {
         res.status(200).json(successRes(response, "Channel queue cleared successfully"));
     } catch (error) {
         logger.error("Error in clearQueue API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to clear channel queue", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to clear channel queue", "BAD_REQUEST"));
     }
 };
 
@@ -295,7 +295,7 @@ export const addDefaultPlaylist = async (req, res) => {
         res.status(201).json(successRes(response, `Added ${response.total} tracks to Default Playlist: ${title}`));
     } catch (error) {
         logger.error("Error in addDefaultPlaylist API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to add default playlist", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to add default playlist", "BAD_REQUEST"));
     }
 };
 
@@ -309,7 +309,7 @@ export const removeDefaultPlaylist = async (req, res) => {
         res.status(200).json(successRes(response, "Default playlist removed successfully"));
     } catch (error) {
         logger.error("Error in removeDefaultPlaylist API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to remove default playlist", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to remove default playlist", "BAD_REQUEST"));
     }
 };
 
@@ -324,7 +324,7 @@ export const updateDefaultPlaylistStatus = async (req, res) => {
         res.status(200).json(successRes(response, "Playlist status updated successfully"));
     } catch (error) {
         logger.error("Error in updateDefaultPlaylistStatus API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to update default playlist status", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to update default playlist status", "BAD_REQUEST"));
     }
 };
 
@@ -356,7 +356,7 @@ export const blockSong = async (req, res) => {
         res.status(200).json(successRes(response, "Song blocked successfully"));
     } catch (error) {
         logger.error("Error in blockSong API", { error: error.message });
-        res.status(400).json(errorRes(error, "Failed to block song", "BAD_REQUEST"));
+        res.status(400).json(errorRes(error, error.message || "Failed to block song", "BAD_REQUEST"));
     }
 };
 

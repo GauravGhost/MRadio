@@ -7,7 +7,8 @@ class JioSaavn {
     async getSongBySongName(songName, retryCount = 1) {
         try {
             const response = await axios.get(JIO_SAAVN_SONG_SEARCH(songName));
-            const results = response.data.results.find(track => checkSimilarity(songName, track.title) > 60);
+            if (!response.data?.results || response.data.results.length === 0) return;
+            const results = response.data.results.find(track => checkSimilarity(songName, track.title) > 60) || response.data.results[0];
             if (!results) return;
             const moreInfo = results.more_info;
 
