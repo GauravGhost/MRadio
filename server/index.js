@@ -77,11 +77,6 @@ app.get("/", function (req, res) {
     // Named channel stream (e.g. /stream/lofi, /stream/pop)
     app.get("/stream/:channelId", (req, res) => handleChannelStream(req, res, req.params.channelId));
 
-    // Icecast status endpoint
-    app.get("/api/icecast/status", (req, res) => {
-        const status = defaultChannel.getIcecastStatus();
-        res.json(status);
-    });
 
     server.listen(PORT, () => {
         console.log(`Radio Broadcast Server listening on port ${PORT}`);
