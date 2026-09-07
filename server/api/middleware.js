@@ -3,6 +3,13 @@ import secret from "../utils/secret.js";
 import { errorRes } from "../utils/response.js";
 
 export const isValidUser = (req, res, next) => {
+    // Check if admin credentials are provided
+    const adminTokenKey = req.headers['x-admin-token-key'];
+    const adminApiKey = req.headers['x-admin-api-key'];
+    if (adminTokenKey && adminApiKey && adminApiKey === secret.X_ADMIN_API_KEY && adminTokenKey === secret.X_ADMIN_TOKEN_KEY) {
+        return next();
+    }
+
     const token = req.headers['x-token-key'];
     if (!token) {
         return res.status(401).json(errorRes(null, 'Unauthorized: Token required', 'UNAUTHORIZED'));
@@ -13,6 +20,7 @@ export const isValidUser = (req, res, next) => {
     }
     next();
 };
+
 
 export const isAdmin = (req, res, next) => {
     const tokenKey = req.headers['x-admin-token-key'];

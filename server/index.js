@@ -26,27 +26,25 @@ app.get("/", function (req, res) {
 
     const defaultChannel = channelManager.getChannel('default');
 
-    // 3. Initialize Icecast streaming for default channel if configured
+    // 3. Initialize Icecast streaming across all channels if configured
     const icecastConfig = {
         host: secret.ICECAST_HOST,
         port: secret.ICECAST_PORT,
         password: secret.ICECAST_PASSWORD,
-        mount: secret.ICECAST_MOUNT,
-        name: secret.ICECAST_NAME,
-        description: secret.ICECAST_DESCRIPTION,
-        genre: secret.ICECAST_GENRE,
-        bitrate: secret.ICECAST_BITRATE
+        mount: secret.ICECAST_MOUNT || '/radio.mp3',
+        name: secret.ICECAST_NAME || 'MRadio',
+        description: secret.ICECAST_DESCRIPTION || 'MRadio Broadcast',
+        genre: secret.ICECAST_GENRE || 'Various',
+        bitrate: secret.ICECAST_BITRATE || '128'
     };
 
     if (icecastConfig.host && icecastConfig.port && icecastConfig.password) {
-        const icecastInitialized = defaultChannel.initializeIcecast(icecastConfig);
-        if (icecastInitialized) {
-            logger.info('Icecast streaming enabled on default channel');
-            logger.info(`Stream will be available at: http://${icecastConfig.host}:${icecastConfig.port}${icecastConfig.mount}`);
-        } else {
-            logger.warn('Failed to initialize Icecast streaming, falling back to direct HTTP streaming');
-        }
+        channelManager.setIcecastConfig(icecastConfig);
+        logger.info(`Icecast multi-channel streaming enabled (host: ${icecastConfig.host}:${icecastConfig.port})`);
+    } else {
+        logger.info('Icecast not configured, direct HTTP streaming active for all channels');
     }
+
 
     // 4. Initialize socket.io with default channel
     socketManager.initialize(server, defaultChannel);

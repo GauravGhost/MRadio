@@ -712,6 +712,7 @@ export class Channel {
     }
 
     getStatus() {
+        const icecast = this.getIcecastStatus();
         return {
             id: this.id,
             name: this.name,
@@ -724,7 +725,15 @@ export class Channel {
                 duration: this.currentTrack.duration,
                 requestedBy: this.currentTrack.requestedBy
             } : null,
-            queueLength: this.tracks.length
+            queueLength: this.tracks.length,
+            useIcecast: this.useIcecast,
+            icecast: icecast.enabled ? {
+                connected: !!icecast.connected,
+                mount: icecast.config?.mount || (this.id === 'default' ? '/radio.mp3' : `/${this.id}.mp3`),
+                streamUrl: icecast.config?.host ? `http://${icecast.config.host}:${icecast.config.port}${icecast.config.mount}` : null,
+                name: icecast.config?.name || `${this.name} Radio`,
+            } : null,
         };
     }
+
 }

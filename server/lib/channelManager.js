@@ -10,6 +10,40 @@ class ChannelManager {
     constructor() {
         this.channels = new Map();
         this.initialized = false;
+        this.icecastConfig = null;
+    }
+
+    setIcecastConfig(config) {
+        this.icecastConfig = config;
+        for (const channel of this.channels.values()) {
+            this.attachIcecastToChannel(channel);
+        }
+    }
+
+    attachIcecastToChannel(channel) {
+        if (!this.icecastConfig || !this.icecastConfig.host || !this.icecastConfig.port || !this.icecastConfig.password) {
+            return;
+        }
+        if (channel.useIcecast && channel.icecastStreamer) {
+            return;
+        }
+
+        const mount = channel.id === 'default'
+            ? (this.icecastConfig.mount || '/radio.mp3')
+            : `/${channel.id}.mp3`;
+
+        const channelConfig = {
+            ...this.icecastConfig,
+            mount,
+            name: `${channel.name} Radio`,
+            description: `${channel.name} - Multi-channel stream`,
+            genre: channel.genre || 'Various',
+        };
+
+        const success = channel.initializeIcecast(channelConfig);
+        if (success) {
+            logger.info(`[ChannelManager] Attached Icecast to channel "${channel.id}" at mount "${mount}"`);
+        }
     }
 
     async init() {
@@ -18,9 +52,11 @@ class ChannelManager {
         // 1. Create Default Channel
         const defaultChannel = new Channel('default', 'Default Radio', 'all');
         this.channels.set('default', defaultChannel);
+        this.attachIcecastToChannel(defaultChannel);
 
         // 2. Load stored custom channels from data/channels.json if present
         this.loadChannelsFromDisk();
+
 
         // 3. Start default channel audio loading
         try {
@@ -37,12 +73,13 @@ class ChannelManager {
     loadChannelsFromDisk() {
         try {
             if (fsHelper.exists(DATA_FILE)) {
-                const data = JSON.parse(fsHelper.read(DATA_FILE));
+                const data = fsHelper.readFromJson(DATA_FILE, []);
                 if (Array.isArray(data)) {
                     for (const item of data) {
                         if (item.id && item.id !== 'default' && !this.channels.has(item.id)) {
                             const channel = new Channel(item.id, item.name || item.id, item.genre || 'all');
                             this.channels.set(item.id, channel);
+                            this.attachIcecastToChannel(channel);
                             // Lazy load track queue for custom channels
                             channel.loadTracks(DEFAULT_TRACKS_LOCATION).then(() => {
                                 channel.play();
@@ -70,15 +107,12 @@ class ChannelManager {
                     });
                 }
             }
-            const dataDir = path.dirname(DATA_FILE);
-            if (!fsHelper.exists(dataDir)) {
-                fsHelper.makeDir(dataDir);
-            }
-            fsHelper.write(DATA_FILE, JSON.stringify(list, null, 2));
+            fsHelper.writeToJson(DATA_FILE, list);
         } catch (error) {
             logger.error('[ChannelManager] Error saving channels to disk:', error);
         }
     }
+
 
     getChannel(id = 'default') {
         const channel = this.channels.get(id);
@@ -99,6 +133,9 @@ class ChannelManager {
         this.channels.set(cleanId, channel);
         this.saveChannelsToDisk();
 
+        // Attach Icecast relay stream if Icecast is configured
+        this.attachIcecastToChannel(channel);
+
         await channel.loadTracks(DEFAULT_TRACKS_LOCATION);
         channel.play();
 
@@ -111,6 +148,14 @@ class ChannelManager {
         const channel = this.channels.get(id);
         if (!channel) throw new Error(`Channel '${id}' not found`);
 
+        if (channel.icecastStreamer) {
+            try {
+                channel.icecastStreamer.disconnect();
+            } catch (err) {
+                logger.warn(`[ChannelManager] Error disconnecting Icecast for channel ${id}:`, err);
+            }
+        }
+
         await channel.cleanupCurrentStream();
         this.channels.delete(id);
         this.saveChannelsToDisk();
@@ -118,6 +163,7 @@ class ChannelManager {
         logger.info(`[ChannelManager] Deleted channel: ${id}`);
         return { deleted: true, id };
     }
+
 
     async updateChannel(id, { name, genre }) {
         const channel = this.channels.get(id);
