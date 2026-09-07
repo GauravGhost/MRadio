@@ -54,6 +54,11 @@ app.get("/", function (req, res) {
     // 5. Mount API Routes
     app.use("/api", router);
 
+    // Health check route alias
+    app.get("/health", (req, res) => {
+        res.redirect("/api/health");
+    });
+
     // 6. Direct HTTP Audio Stream Handler (Single-Port Multi-Channel)
     const handleChannelStream = (req, res, channelId = 'default') => {
         const targetChannel = channelManager.getChannel(channelId);

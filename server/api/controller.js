@@ -489,3 +489,25 @@ export const getIcecastStatus = async (req, res) => {
         res.status(500).json(errorRes(error, "Failed to fetch Icecast status", "INTERNAL_SERVER_ERROR"));
     }
 };
+
+export const getHealth = async (req, res) => {
+    try {
+        const channels = channelManager.getAllChannels();
+        const defaultChannel = channelManager.getChannel('default');
+        const icecast = defaultChannel ? defaultChannel.getIcecastStatus() : null;
+
+        res.status(200).json(successRes({
+            status: "healthy",
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString(),
+            activeChannels: Array.isArray(channels) ? channels.length : 0,
+            playingChannels: Array.isArray(channels) ? channels.filter(c => c.playing).length : 0,
+            icecastConnected: !!icecast?.connected,
+            version: "1.0.0",
+        }, "MRadio server is healthy"));
+    } catch (error) {
+        logger.error("Error in getHealth API", { error: error.message });
+        res.status(500).json(errorRes(error, "Health check failed", "INTERNAL_SERVER_ERROR"));
+    }
+};
+

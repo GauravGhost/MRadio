@@ -45,11 +45,15 @@ import {
     generateToken,
     getAllTokens,
     removeTokenByIndex,
-    getIcecastStatus
+    getIcecastStatus,
+    getHealth
 } from './controller.js';
 import { isAdmin, isValidUser } from './middleware.js';
 
 const router = express.Router();
+
+// 0. Health Check Route
+router.get("/health", getHealth);
 
 // 1. Channel Management Routes
 router.get("/channels", getAllChannels);
