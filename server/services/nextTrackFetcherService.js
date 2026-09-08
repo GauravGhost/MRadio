@@ -95,7 +95,8 @@ const createTrackResponse = (song, cachedPath = null) => {
         url: cachedPath || song.url,
         title: song.title,
         duration: song.duration,
-        requestedBy: song.requestedBy
+        requestedBy: song.requestedBy,
+        urlType: song.urlType
     };
 }
 
@@ -180,7 +181,8 @@ export const fetchNextTrack = async (channelId = 'default', genre = 'all') => {
             return createTrackResponse({
                 ...songResult,
                 requestedBy: trackToProcess.requestedBy,
-                duration: trackToProcess.duration
+                duration: trackToProcess.duration,
+                urlType: trackToProcess.urlType
             });
 
         } catch (error) {

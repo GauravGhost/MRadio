@@ -1,6 +1,6 @@
 import axios from "axios";
 import { JIO_SAAVN_PLAYLIST_SEARCH, JIO_SAAVN_SONG_SEARCH } from "../utils/constant.js";
-import { checkSimilarity } from "../utils/utils.js";
+import { checkSimilarity, isCleanMatch } from "../utils/utils.js";
 import logger from "../utils/logger.js";
 
 class JioSaavn {
@@ -8,7 +8,10 @@ class JioSaavn {
         try {
             const response = await axios.get(JIO_SAAVN_SONG_SEARCH(songName));
             if (!response.data?.results || response.data.results.length === 0) return;
-            const results = response.data.results.find(track => checkSimilarity(songName, track.title) > 60) || response.data.results[0];
+            const cleanResults = response.data.results.filter(track => isCleanMatch(songName, track.title));
+            const resultsToSearch = cleanResults.length > 0 ? cleanResults : response.data.results;
+
+            const results = resultsToSearch.find(track => checkSimilarity(songName, track.title) > 60) || resultsToSearch[0];
             if (!results) return;
             const moreInfo = results.more_info;
 

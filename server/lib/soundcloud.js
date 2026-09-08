@@ -1,57 +1,59 @@
-import SoundCloudScraper from "soundcloud-scraper";
+import ytdl from 'youtube-dl-exec';
 import logger from "../utils/logger.js";
-import secret from "../utils/secret.js";
-import { checkSimilarity } from "../utils/utils.js";
-
-const GENRES = ['pop', 'rock', 'hip-hop', 'electronic', 'classical', 'jazz'];
+import { checkSimilarity, isCleanMatch } from "../utils/utils.js";
+import { getYtDlpOptions } from '../utils/ytdlConfig.js';
 
 class SoundCloud {
-    constructor() {
-        this.client = new SoundCloudScraper.Client(secret.SOUNDCLOUD_API_KEY);
-    }
-
     async getSongBySongName(songName, retryCount = 1) {
         try {
-            // Search for the song
-            const songs = await this.client.search(songName, 'track');
-            if (!songs || songs.length === 0) {
+            // Search using yt-dlp soundcloud site filter
+            const query = `ytsearch5:${songName} site:soundcloud.com`;
+            const options = getYtDlpOptions({
+                dumpSingleJson: true,
+                flatPlaylist: true,
+            });
+            
+            logger.info(`Searching SoundCloud for: ${songName}`);
+            const results = await ytdl(query, options);
+            
+            if (!results || !results.entries || results.entries.length === 0) {
                 return;
             }
 
-            const songData = songs.find(track => checkSimilarity(songName, track.name) > 60) || songs[0];
-            if (!songData) {
-                return;
-            }
-            const song = await this.client.getSongInfo(songData.url);
-            if (!song) return;
+            // Filter out remixes/covers unless explicitly asked for, then find best match
+            const cleanEntries = results.entries.filter(track => isCleanMatch(songName, track.title || track.fulltitle));
+            const entriesToSearch = cleanEntries.length > 0 ? cleanEntries : results.entries;
+            
+            let songData = entriesToSearch.find(track => checkSimilarity(songName, track.title || track.fulltitle) > 60) || entriesToSearch[0];
+            
+            if (!songData) return;
 
-            // Check duration (convert ms to seconds)
-            const duration = Math.floor(song.duration / 1000);
-            if (duration > 600) {
+            if (songData.duration && songData.duration > 600) {
                 throw new Error("Song Duration is more than 10 minutes.");
             }
-            const streamUrl = song.streams?.progressive;
-            if (!streamUrl || !streamUrl.includes('/stream/progressive')) {
-                return;
-            }
+
             return {
-                title: song.title,
-                url: song.url || songData.url,
-                duration: duration,
+                title: songData.title || songData.fulltitle,
+                url: songData.webpage_url || songData.url,
+                duration: songData.duration || 0,
             };
         } catch (error) {
-            logger.error(error);
-            logger.error("Failed after retrying:", { error });
+            logger.error(`SoundCloud search error: ${error.message}`);
             return;
         }
     }
 
     async fetchStreamUrl(url) {
         try {
-            const stream = await this.client.fetchStreamURL(url);
-            return stream;
+            const options = getYtDlpOptions({
+                format: 'bestaudio/best',
+                getUrl: true
+            });
+            logger.info(`Fetching SoundCloud stream URL for: ${url}`);
+            const streamUrl = await ytdl(url, options);
+            return streamUrl;
         } catch (error) {
-            logger.error(error);
+            logger.error(`SoundCloud fetch stream error: ${error.message}`);
             throw error;
         }
     }

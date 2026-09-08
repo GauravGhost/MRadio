@@ -115,7 +115,8 @@ class Service {
                 id: index + 1,
                 title: item.title,
                 duration: formattedDuration,
-                requestedBy: item.requestedBy || "anonymous"
+                requestedBy: item.requestedBy || "anonymous",
+                source: item.urlType || "Unknown"
             };
         });
     }
@@ -128,6 +129,10 @@ class Service {
         }
         const songQueue = new SongQueueManager();
         songQueue.addToQueue(metadata);
+        
+        const ch = channelManager.getChannel(channelId);
+        if (ch) ch.clearSystemTracksFromBuffer();
+        
         return { channelId, title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
@@ -139,6 +144,10 @@ class Service {
         }
         const songQueue = new SongQueueManager();
         songQueue.addToFront(metadata);
+
+        const ch = channelManager.getChannel(channelId);
+        if (ch) ch.clearSystemTracksFromBuffer();
+        
         return { channelId, title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
@@ -149,6 +158,10 @@ class Service {
         }
         const songQueue = new SongQueueManager();
         songQueue.addManyToQueue(metadata);
+        
+        const ch = channelManager.getChannel(channelId);
+        if (ch) ch.clearSystemTracksFromBuffer();
+        
         return { channelId, added: true, total: metadata.length };
     }
 
@@ -159,6 +172,10 @@ class Service {
         }
         const songQueue = new SongQueueManager();
         songQueue.addManyToTop(metadata);
+        
+        const ch = channelManager.getChannel(channelId);
+        if (ch) ch.clearSystemTracksFromBuffer();
+        
         return { channelId, added: true, total: metadata.length };
     }
 

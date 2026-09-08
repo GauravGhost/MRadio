@@ -3,6 +3,8 @@ import Service from "../services/apiService.js";
 import logger from "../utils/logger.js";
 import commonConfigService from "../services/commonConfigService.js";
 import channelManager from "../lib/channelManager.js";
+import fs from 'fs';
+import { getCookiesPath } from "../utils/utils.js";
 
 const service = new Service();
 
@@ -511,3 +513,19 @@ export const getHealth = async (req, res) => {
     }
 };
 
+export const updateCookies = async (req, res) => {
+    try {
+        const { cookies } = req.body;
+        if (typeof cookies !== 'string') {
+            return res.status(400).json(errorRes(null, "Cookies content must be a string", "BAD_REQUEST"));
+        }
+        
+        const cookiesPath = getCookiesPath();
+        fs.writeFileSync(cookiesPath, cookies, 'utf8');
+        
+        res.status(200).json(successRes({ updated: true }, "YouTube cookies updated successfully"));
+    } catch (error) {
+        logger.error("Error in updateCookies API", { error: error.message });
+        res.status(500).json(errorRes(error, "Failed to update cookies", "INTERNAL_SERVER_ERROR"));
+    }
+};

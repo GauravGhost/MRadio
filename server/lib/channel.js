@@ -13,6 +13,7 @@ import { DEFAULT_QUEUE_SIZE, DEFAULT_TRACKS_LOCATION } from "../utils/constant.j
 import socketManager from "./socketManager.js";
 import IcecastStreamer from "./icecastStreamer.js";
 import SilenceGenerator from "./silenceGenerator.js";
+import SongQueueManager from "../utils/queue/songQueueManager.js";
 
 ffmpeg.setFfmpegPath(getFfmpegPath());
 
@@ -119,6 +120,15 @@ export class Channel {
             try {
                 while (this.tracks.length < this.minQueueSize) {
                     const song = await fetchNextTrack(this.id, this.genre);
+                    
+                    if (['auto', 'fallback', 'system'].includes(song.requestedBy)) {
+                        const songQueue = new SongQueueManager();
+                        if (songQueue.getLength() > 0) {
+                            logger.info(`[Channel:${this.id}] Discarding downloaded system track '${song.title}' because user queue has items.`);
+                            continue; 
+                        }
+                    }
+
                     if (this.tracks.length < this.minQueueSize) {
                         const songBitrate = await this.getTrackBitrate(song.url);
                         this.tracks.push({
@@ -126,7 +136,8 @@ export class Channel {
                             bitrate: songBitrate,
                             title: song.title,
                             duration: song?.duration ? durationFormatter(song.duration) : "00:00",
-                            requestedBy: song?.requestedBy ?? "anonymous"
+                            requestedBy: song?.requestedBy ?? "anonymous",
+                            urlType: song?.urlType
                         });
                         logger.info(`[Channel:${this.id}] Added track: ${song.title}`);
                     }
@@ -244,6 +255,26 @@ export class Channel {
         return true;
     }
 
+    clearSystemTracksFromBuffer() {
+        if (this.tracks.length > 1) {
+            let removedCount = 0;
+            const newTracks = [this.tracks[0]]; // Keep the currently playing track
+            for (let i = 1; i < this.tracks.length; i++) {
+                const track = this.tracks[i];
+                if (track.requestedBy !== 'auto' && track.requestedBy !== 'fallback' && track.requestedBy !== 'system') {
+                    newTracks.push(track);
+                } else {
+                    logger.info(`[Channel:${this.id}] Removing system-buffered track: ${track.title}`);
+                    removedCount++;
+                }
+            }
+            if (removedCount > 0) {
+                this.tracks = newTracks;
+                this.ensureQueueSize();
+            }
+        }
+    }
+
     async loadTracks(dir) {
         try {
             this.tracks = [];
@@ -277,7 +308,8 @@ export class Channel {
                 bitrate: songBitrate, 
                 title: song.title, 
                 duration: song?.duration ? durationFormatter(song.duration) : "00:00", 
-                requestedBy: song?.requestedBy ?? "anonymous" 
+                requestedBy: song?.requestedBy ?? "anonymous",
+                urlType: song?.urlType
             });
 
             this.ensureQueueSize();

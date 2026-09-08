@@ -113,6 +113,22 @@ export const checkSimilarity = (original, found) => {
     return similarity;
 };
 
+export const isCleanMatch = (query, resultTitle) => {
+    if (!resultTitle) return false;
+    const queryLower = query.toLowerCase();
+    const titleLower = resultTitle.toLowerCase();
+    
+    const unwantedKeywords = ['remix', 'mashup', 'cover', 'live', 'slowed', 'reverb', '8d', 'instrumental', 'karaoke', 'lofi', 'lo-fi', 'sped up', 'acoustic'];
+    
+    for (const keyword of unwantedKeywords) {
+        // If the result title has the keyword, but the user DID NOT ask for it, it's a dirty match
+        if (titleLower.includes(keyword) && !queryLower.includes(keyword)) {
+            return false; 
+        }
+    }
+    return true;
+};
+
 export const extractYoutubePlaylistId = (url) => {
     const urlParams = new URL(url).searchParams;
     const playlistId = urlParams.get('list');

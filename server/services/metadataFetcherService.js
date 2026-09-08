@@ -3,6 +3,7 @@ import SoundCloud from "../lib/soundcloud.js";
 import SpotifyAPI from "../lib/spotify.js";
 import Yts from "../lib/yts.js";
 import { addYoutubeVideoId, checkSimilarity, durationFormatter } from "../utils/utils.js";
+import logger from "../utils/logger.js";
 
 /**
  * @description Search song on spotify
@@ -13,20 +14,17 @@ const searchSpotifySong = async (songName) => {
     try {
         const spotify = new SpotifyAPI();
         const songDetail = await spotify.searchTrack(songName);
-        if(!songDetail){
+        if (!songDetail) {
             throw new Error("No Song found By this Name");
-        } 
-        const { name, id, artists } = songDetail;
-        let artistName = '';
-        if (artists.length > 0) {
-            artistName = artists[0].name;
         }
-        if (!name) {
+
+        if (!songDetail.name) {
             throw new Error("Invalid song name");
         }
-        return { name: `${name} ${artistName}`, id };
+        // Using searchQuery (title + artist)
+        return { name: songDetail.searchQuery, id: songDetail.id };
     } catch (error) {
-        console.error("Spotify search error:", error.message);
+        logger.error("Spotify search error:", error);
         return null;
     }
 };
@@ -42,7 +40,7 @@ const searchJioSaavnSong = async (spotifyName) => {
         const song = await jio.getSongBySongName(spotifyName);
         return song;
     } catch (error) {
-        console.error("JioSaavn search error:", error.message);
+        logger.error("JioSaavn search error:", error);
         return null;
     }
 };
@@ -58,7 +56,7 @@ const searchSoundCloudSong = async (spotifyName) => {
         const song = await soundCloud.getSongBySongName(spotifyName);
         return song;
     } catch (error) {
-        console.error("SoundCloud search error:", error.message);
+        logger.error("SoundCloud search error:", error);
         return null;
     }
 };
@@ -70,13 +68,13 @@ export const searchYouTubeSong = async (spotifyName) => {
     try {
         const yt = new Yts();
         const videoDetail = await yt.getVideoDetail(spotifyName);
-        
+
         if (!videoDetail) {
             return null;
         }
-        
+
         const { url, title, timestamp } = videoDetail;
-        
+
         // Validate the video (this now handles availability checking internally without cookies)
         const { status, message } = await yt.validateVideo(url);
 
@@ -84,21 +82,21 @@ export const searchYouTubeSong = async (spotifyName) => {
             // Log the validation error but don't fail completely
             // Some videos might have format issues but still be playable
             console.warn(`YouTube video validation failed: ${message} - ${title}`);
-            
+
             // For format-related errors, we'll still return the video but mark it as potentially problematic
-            if (message.includes('Requested format is not available') || 
+            if (message.includes('Requested format is not available') ||
                 message.includes('format')) {
                 console.info(`Accepting video despite format issues: ${title}`);
                 return { url, title, duration: timestamp, formatWarning: true };
             }
-            
+
             // For other validation errors (duration, category), don't use this video
             return null;
         }
 
         return { url, title, duration: timestamp };
     } catch (error) {
-        console.error("YouTube search error:", error.message);
+        logger.error("YouTube search error:", error);
         return null;
     }
 };
@@ -150,7 +148,7 @@ const updateMetadata = (metadata, type, title, url, duration) => {
 export const generateSongMetadata = async (songName, requestedBy, force = false, preference = null) => {
     try {
         let searchName = songName;
-        
+
         // If not forced, try Spotify first to normalize track title and artist
         if (!force) {
             try {
@@ -176,7 +174,7 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
                     if (force) throw new Error("Song not found on SoundCloud");
                     break;
                 }
-                
+
                 case 'jiosaavn': {
                     const jioSaavnResult = await searchJioSaavnSong(searchName);
                     if (jioSaavnResult) {
@@ -185,7 +183,7 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
                     if (force) throw new Error("Song not found on JioSaavn");
                     break;
                 }
-                
+
                 case 'youtube': {
                     const youtubeResult = await searchYouTubeSong(searchName);
                     if (youtubeResult) {
@@ -194,7 +192,7 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
                     if (force) throw new Error("Song not found on YouTube");
                     break;
                 }
-                
+
                 default:
                     if (force) throw new Error("Invalid platform preference");
             }
@@ -279,6 +277,31 @@ export const searchJioSaavnPlaylist = async (playlistId, requestedBy) => {
     return playlistMetadata;
 }
 
+export const searchSpotifyPlaylist = async (playlistId, requestedBy) => {
+    let cleanId = String(playlistId || "").trim();
+    const spotify = new SpotifyAPI();
+    const { id } = spotify.extractIdAndType(cleanId);
+    cleanId = id || cleanId;
+
+    const tracks = await spotify.getsongsByPlaylist(cleanId);
+    if (!tracks || tracks.length === 0) {
+        throw new Error("No videos found in Spotify playlist.");
+    }
+
+    // We return the searchQuery as the originalName so the queue manager will process it 
+    // and resolve it via YouTube/SoundCloud when it plays.
+    return tracks
+        .filter((track) => track.duration <= 900)
+        .map((track) => ({
+            title: track.searchQuery,
+            duration: durationFormatter(track.duration),
+            requestedBy: requestedBy,
+            url: '', // Will be resolved at playback time
+            urlType: "spotify",
+            originalName: track.searchQuery
+        }));
+}
+
 /**
  * @description Main function to generate playlist metadata
  * @param {*} playlistId 
@@ -296,10 +319,10 @@ export const generatePlaylistMetadata = async (playlistId, sourceName, requested
         case "jiosaavn":
             return await searchJioSaavnPlaylist(playlistId, requestedBy);
         case "spotify":
-            throw new Error("Spotify playlists cannot be imported directly because Spotify API search requires an active Premium developer subscription. Please import from YouTube or JioSaavn.");
+            return await searchSpotifyPlaylist(playlistId, requestedBy);
         case "soundcloud":
             throw new Error("SoundCloud playlists are not supported directly. Please use YouTube or JioSaavn.");
         default:
-            throw new Error(`Unsupported playlist source "${sourceName}". Supported sources are: YouTube, JioSaavn.`);
+            throw new Error(`Unsupported playlist source "${sourceName}". Supported sources are: YouTube, JioSaavn, Spotify.`);
     }
 }

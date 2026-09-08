@@ -68,81 +68,24 @@ class MyDownloader {
         const outputFilePath = cacheManager.getOriginalPath(title);
         logger.info(`Downloading ${title} to ${outputFilePath}`);
         try {
-            const cookiesPath = getCookiesPath();
-            
-            // Check if cookies exist and are valid
-            let useCookies = false;
-            if (fs.existsSync(cookiesPath)) {
-                const cookiesContent = fs.readFileSync(cookiesPath, 'utf8');
-                const cookieLines = cookiesContent.split('\n').filter(line => 
-                    line.trim() && !line.startsWith('#') && line.includes('.youtube.com')
-                );
+            const { getYtDlpOptions } = await import('../utils/ytdlConfig.js');
+            const options = getYtDlpOptions({
+                output: outputFilePath,
+                extractAudio: true,
+                audioFormat: 'mp3',
+                audioQuality: 6,
+                preferFreeFormats: true,
+                ffmpegLocation: getFfmpegPath(),
+                verbose: false
+            });
 
-                if (cookieLines.length > 0) {
-                    logger.info(`Found ${cookieLines.length} YouTube cookies, will try with cookies first`);
-                    useCookies = true;
-                } else {
-                    logger.warn('No valid YouTube cookies found in cookies.txt');
-                }
-            } else {
-                logger.warn('No cookies.txt file found');
-            }
-
-            // Try different download methods in order of preference
-            const downloadMethods = [
-                // Method 1: Without cookies (often works better for public videos)
-                {
-                    name: 'without cookies',
-                    options: {
-                        output: outputFilePath,
-                        extractAudio: true,
-                        audioFormat: 'mp3',
-                        audioQuality: 6,
-                        noCallHome: true,
-                        noCheckCertificate: true,
-                        preferFreeFormats: true,
-                        ffmpegLocation: getFfmpegPath(),
-                        verbose: false // Reduce verbosity for cleaner logs
-                    }
-                },
-                // Method 2: With cookies (if available)
-                ...(useCookies ? [{
-                    name: 'with cookies',
-                    options: {
-                        output: outputFilePath,
-                        extractAudio: true,
-                        audioFormat: 'mp3',
-                        audioQuality: 6,
-                        noCallHome: true,
-                        noCheckCertificate: true,
-                        preferFreeFormats: true,
-                        ffmpegLocation: getFfmpegPath(),
-                        cookies: cookiesPath,
-                        verbose: false
-                    }
-                }] : [])
-            ];
-
-            let downloadSuccessful = false;
-            let lastError = null;
-
-            // Try each download method
-            for (const method of downloadMethods) {
-                try {
-                    logger.info(`Attempting download of ${title} ${method.name}`);
-                    await ytdl(url, method.options);
-                    logger.info(`Successfully downloaded ${title} using ${method.name}`);
-                    downloadSuccessful = true;
-                    break;
-                } catch (error) {
-                    logger.warn(`Download failed ${method.name}: ${error.message}`);
-                    lastError = error;
-                    continue;
-                }
-            }
-
-            if (!downloadSuccessful) {
-                throw new Error(`All download methods failed. Last error: ${lastError?.message}`);
+            try {
+                logger.info(`Attempting download of ${title} using yt-dlp config`);
+                await ytdl(url, options);
+                logger.info(`Successfully downloaded ${title}`);
+            } catch (error) {
+                logger.warn(`Download failed: ${error.message}`);
+                throw new Error(`Download method failed. Last error: ${error.message}`);
             }
 
             return { url: outputFilePath }

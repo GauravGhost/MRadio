@@ -46,7 +46,8 @@ import {
     getAllTokens,
     removeTokenByIndex,
     getIcecastStatus,
-    getHealth
+    getHealth,
+    updateCookies
 } from './controller.js';
 import { isAdmin, isValidUser } from './middleware.js';
 
@@ -100,6 +101,7 @@ router.post("/config", isValidUser, updateCommonConfig);
 router.get("/admin/tokens", isAdmin, getAllTokens);
 router.post("/admin/token", isAdmin, generateToken);
 router.delete("/admin/tokens/:index", isAdmin, removeTokenByIndex);
+router.post("/admin/cookies", isAdmin, updateCookies);
 router.get("/system/icecast", getIcecastStatus);
 
 export default router;

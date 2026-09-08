@@ -1,7 +1,7 @@
 import ytdl from 'youtube-dl-exec';
 import yts from 'yt-search'
 import logger from '../utils/logger.js';
-import { checkSimilarity, getCookiesPath } from '../utils/utils.js';
+import { checkSimilarity, getCookiesPath, isCleanMatch } from '../utils/utils.js';
 
 class Yts {
     async getVideoDetail(name, artistName) {
@@ -11,8 +11,10 @@ class Yts {
             if (!r?.videos || r.videos.length === 0) {
                 return;
             }
+            const cleanVideos = r.videos.filter(track => isCleanMatch(name, track.title));
+            const videosToSearch = cleanVideos.length > 0 ? cleanVideos : r.videos;
 
-            const result = r.videos.find(track => checkSimilarity(name, track.title) > 60) || r.videos[0];
+            const result = videosToSearch.find(track => checkSimilarity(name, track.title) > 60) || videosToSearch[0];
             return result;
         } catch (error) {
             logger.error("Error getting details: " + error.message);
@@ -35,78 +37,14 @@ class Yts {
 
     async validateVideo(url) {
         try {
-            const fs = (await import('fs')).default;
-            const cookiesPath = getCookiesPath();
+            const { getYtDlpOptions } = await import('../utils/ytdlConfig.js');
+            const options = getYtDlpOptions({
+                dumpSingleJson: true,
+                ignoreErrors: true
+            });
             
-            // Check if cookies file exists
-            const hasCookies = fs.existsSync(cookiesPath);
-            let cookiesContent = '';
-            let validCookieLines = 0;
-            
-            if (hasCookies) {
-                cookiesContent = fs.readFileSync(cookiesPath, 'utf8');
-                const cookieLines = cookiesContent.split('\n').filter(line => 
-                    line.trim() && !line.startsWith('#') && line.includes('.youtube.com')
-                );
-                validCookieLines = cookieLines.length;
-            }
-
-            // Try different extraction methods in order of preference
-            const extractionMethods = [
-                // Method 1: Without cookies (often works better)
-                {
-                    name: 'without cookies',
-                    options: {
-                        dumpSingleJson: true,
-                        noWarnings: true,
-                        noCallHome: true,
-                        noCheckCertificate: true,
-                        ignoreErrors: true
-                    }
-                },
-                // Method 2: With cookies (if available)
-                ...(hasCookies && validCookieLines > 0 ? [{
-                    name: 'with cookies',
-                    options: {
-                        dumpSingleJson: true,
-                        noWarnings: true,
-                        noCallHome: true,
-                        noCheckCertificate: true,
-                        cookies: cookiesPath,
-                        ignoreErrors: true
-                    }
-                }] : []),
-                // Method 3: With cookies and specific format
-                ...(hasCookies && validCookieLines > 0 ? [{
-                    name: 'with cookies and audio format',
-                    options: {
-                        dumpSingleJson: true,
-                        noWarnings: true,
-                        noCallHome: true,
-                        noCheckCertificate: true,
-                        cookies: cookiesPath,
-                        format: 'bestaudio[ext=m4a]/bestaudio/worst',
-                        ignoreErrors: true
-                    }
-                }] : [])
-            ];
-
-            let info = null;
-            let usedMethod = null;
-
-            // Try each extraction method
-            for (const method of extractionMethods) {
-                try {
-                    logger.info(`Trying video extraction ${method.name} for ${url}`);
-                    info = await ytdl(url, method.options);
-                    usedMethod = method.name;
-                    logger.info(`Successfully extracted video info using ${method.name}`);
-                    break;
-                } catch (error) {
-                    logger.warn(`Video extraction failed using ${method.name}: ${error.message}`);
-                    continue;
-                }
-            }
+            logger.info(`Trying video extraction for ${url}`);
+            const info = await ytdl(url, options);
 
             // If all methods failed, return error
             if (!info?.duration) {
@@ -136,8 +74,8 @@ class Yts {
 
             return { 
                 status: true, 
-                message: `Successful (using ${usedMethod})`,
-                extractionMethod: usedMethod 
+                message: `Successful (using yt-dlp config)`,
+                extractionMethod: 'yt-dlp config' 
             };
             
         } catch (error) {
@@ -164,17 +102,15 @@ class Yts {
 
     async checkVideoAvailability(url) {
         try {
-            const cookiesPath = getCookiesPath();
-            
-            // Quick availability check without downloading
-            const info = await ytdl(url, {
+            const { getYtDlpOptions } = await import('../utils/ytdlConfig.js');
+            const options = getYtDlpOptions({
                 dumpSingleJson: true,
-                noWarnings: true,
-                noCallHome: true,
-                cookies: cookiesPath,
-                extractFlat: true, // Only get basic info
+                extractFlat: true,
                 ignoreErrors: false
             });
+            
+            // Quick availability check without downloading
+            const info = await ytdl(url, options);
             
             return { available: true, info };
         } catch (error) {
