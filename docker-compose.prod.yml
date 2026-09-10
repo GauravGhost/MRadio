@@ -1,0 +1,31 @@
+services:
+  mradio-server:
+    image: mradio-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mradio-server
+    restart: always
+    ports:
+      - "${APP_PORT:-9126}:9126"
+    environment:
+      - NODE_ENV=production
+      - FFMPEG_ENV=production
+      - TZ=${TZ:-Asia/Kolkata}
+    volumes:
+      - /data/mradio/data:/usr/src/app/data
+      - /data/mradio/cache:/usr/src/app/cache
+      - /data/mradio/media:/usr/src/app/media
+      - /data/mradio/logs:/usr/src/app/logs
+      - /data/mradio/config:/usr/src/app/config
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9126/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

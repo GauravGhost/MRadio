@@ -36,3 +36,6 @@ data/
 test.json
 fallback/
 media/
+
+# Command Code - local agent state (taste learnings, sessions, plans). Keep local, never commit.
+.commandcode/

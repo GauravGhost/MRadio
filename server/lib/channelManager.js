@@ -11,6 +11,26 @@ class ChannelManager {
         this.channels = new Map();
         this.initialized = false;
         this.icecastConfig = null;
+        this.registerShutdownFlush();
+    }
+
+    /**
+     * Flush pending session writes on shutdown so a redeploy resumes exactly
+     */
+    registerShutdownFlush() {
+        const flush = () => {
+            for (const channel of this.channels.values()) {
+                try {
+                    channel.writeStateNow();
+                } catch (error) {
+                    logger.error(`[ChannelManager] Failed to flush state for channel "${channel.id}":`, error);
+                }
+            }
+            process.exit(0);
+        };
+
+        process.on('SIGTERM', flush);
+        process.on('SIGINT', flush);
     }
 
     setIcecastConfig(config) {
@@ -49,25 +69,59 @@ class ChannelManager {
     async init() {
         if (this.initialized) return;
 
-        // 1. Create Default Channel
         const defaultChannel = new Channel('default', 'Default Radio', 'all');
         this.channels.set('default', defaultChannel);
-        this.attachIcecastToChannel(defaultChannel);
 
-        // 2. Load stored custom channels from data/channels.json if present
+        this.attachIcecastToChannel(defaultChannel);
         this.loadChannelsFromDisk();
 
-
-        // 3. Start default channel audio loading
-        try {
-            await defaultChannel.loadTracks(DEFAULT_TRACKS_LOCATION);
-            defaultChannel.play();
-            logger.info('[ChannelManager] Default channel initialized successfully');
-        } catch (err) {
-            logger.error('[ChannelManager] Failed to load tracks for default channel:', err);
-        }
+        await this.startChannel(defaultChannel);
 
         this.initialized = true;
+    }
+
+    /**
+     * Resume the persisted session.
+     */
+    async startChannel(channel) {
+        try {
+            const resumed = await channel.restoreSession(DEFAULT_TRACKS_LOCATION);
+
+            if (resumed) {
+                logger.info(`[ChannelManager] Resumed previous session for channel "${channel.id}"`);
+            } else {
+                await channel.loadTracks(DEFAULT_TRACKS_LOCATION);
+                logger.info(`[ChannelManager] Started a fresh session for channel "${channel.id}"`);
+            }
+
+            channel.play();
+        } catch (err) {
+            logger.error(`[ChannelManager] Failed to start channel "${channel.id}":`, err);
+        }
+    }
+
+    /**
+     * Liveness of every channel's stream engine for health check.
+     */
+    getHealthReport() {
+        const channels = [];
+        const unhealthy = [];
+
+        for (const channel of this.channels.values()) {
+            const streamAlive = channel.isStreamAlive();
+            channels.push({
+                id: channel.id,
+                playing: channel.playing,
+                isIdle: channel.isIdle,
+                listeners: channel.clients.size,
+                streamAlive,
+            });
+            if (!streamAlive) {
+                unhealthy.push(channel.id);
+            }
+        }
+
+        return { channels, unhealthy, healthy: unhealthy.length === 0 };
     }
 
     loadChannelsFromDisk() {
@@ -81,11 +135,7 @@ class ChannelManager {
                             this.channels.set(item.id, channel);
                             this.attachIcecastToChannel(channel);
                             // Lazy load track queue for custom channels
-                            channel.loadTracks(DEFAULT_TRACKS_LOCATION).then(() => {
-                                channel.play();
-                            }).catch(err => {
-                                logger.error(`Failed to load tracks for channel ${item.id}:`, err);
-                            });
+                            this.startChannel(channel);
                         }
                     }
                 }

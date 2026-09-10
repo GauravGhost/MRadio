@@ -494,19 +494,32 @@ export const getIcecastStatus = async (req, res) => {
 
 export const getHealth = async (req, res) => {
     try {
-        const channels = channelManager.getAllChannels();
+        const report = channelManager.getHealthReport();
         const defaultChannel = channelManager.getChannel('default');
         const icecast = defaultChannel ? defaultChannel.getIcecastStatus() : null;
 
-        res.status(200).json(successRes({
-            status: "healthy",
+        const payload = {
+            status: report.healthy ? "healthy" : "unhealthy",
             uptime: Math.floor(process.uptime()),
             timestamp: new Date().toISOString(),
-            activeChannels: Array.isArray(channels) ? channels.length : 0,
-            playingChannels: Array.isArray(channels) ? channels.filter(c => c.playing).length : 0,
+            activeChannels: report.channels.length,
+            playingChannels: report.channels.filter(c => c.playing).length,
             icecastConnected: !!icecast?.connected,
+            unhealthyChannels: report.unhealthy,
+            channels: report.channels,
             version: "1.0.0",
-        }, "MRadio server is healthy"));
+        };
+
+        if (!report.healthy) {
+            logger.error("Health check failed: stream engine not running", { channels: report.unhealthy });
+            return res.status(503).json(errorRes(
+                `Stream engine not running for channel(s): ${report.unhealthy.join(', ')}`,
+                "Health check failed",
+                "SERVICE_UNAVAILABLE"
+            ));
+        }
+
+        res.status(200).json(successRes(payload, "MRadio server is healthy"));
     } catch (error) {
         logger.error("Error in getHealth API", { error: error.message });
         res.status(500).json(errorRes(error, "Health check failed", "INTERNAL_SERVER_ERROR"));

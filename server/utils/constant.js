@@ -9,6 +9,7 @@ export const DEFAULT_TRACKS_LOCATION = "media/tracks";
 export const DEFAULT_FALLBACK_LOCATION = "media/fallback";
 
 export const SONG_QUEUE_LOCATION = "data/queue.json";
+export const PLAYBACK_STATE_LOCATION = "data/playbackState";
 export const BLOCK_LIST_LOCATION = "data/blockList.json";
 export const DEFAULT_PLAYLIST_LOCATION = "data/defaultSongPlaylist.json";
 export const DEFAULT_PLAYLIST_METADATA_LOCATION = "data/defaultPlaylistMetadata.json";
@@ -17,6 +18,12 @@ export const COMMON_CONFIG_LOCATION = "data/commonConfig.json";
 export const DEFAULT_QUEUE_SIZE = process.env.QUEUE_BUFFER_SIZE ? parseInt(process.env.QUEUE_BUFFER_SIZE, 10) : 2;
 export const SONG_METADATA_UPDATE_TIME = 2 * 24 * 60 * 60 * 1000; // 2 days
 export const CACHE_SIZE = 1024 * 1024 * 1024; // 1 GB
+
+// Session resume across restarts.
+// Downtime longer than this is treated as "too much delay": start a fresh session instead of resuming.
+export const RESUME_MAX_GAP_MS = (process.env.RESUME_MAX_GAP_SECONDS ? parseInt(process.env.RESUME_MAX_GAP_SECONDS, 10) : 180) * 1000;
+// Don't resume a track that is within this many seconds of finishing; advance instead.
+export const RESUME_MIN_REMAINING_SECONDS = 5;
 
 export const COMMON_CONFIG_KEYS = {
     defaultPlaylistGenre: "defaultPlaylistGenre", // string

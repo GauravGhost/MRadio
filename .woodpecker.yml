@@ -26,21 +26,28 @@ steps:
         from_secret: ORACLE_KEY
       port:
         from_secret: ORACLE_PORT
-      command_timeout: 5m
+      command_timeout: 20m
+      script_stop: true
       script:
         - "echo Connected to Oracle Cloud server"
         - "cd /home/ubuntu/docker/radio"
         - "git fetch origin master && git reset --hard origin/master"
-        - "chmod +x run.sh"
-        - "bash run.sh radio-main"
+        - 'PREV_IMAGE_ID=$(docker inspect --format="{{.Image}}" mradio-server 2>/dev/null || true); echo "Previous running image: $PREV_IMAGE_ID"'
+        - 'for cid in $(docker ps -q --filter publish=9126); do name=$(docker inspect --format="{{.Name}}" "$cid"); if [ -n "$name" ] && [ "$name" != "/mradio-server" ]; then echo "Removing legacy container holding port 9126: $name"; docker rm -f "$cid"; fi; done'
+        - "docker compose -f docker-compose.prod.yml build mradio-server"
+        - 'if [ -n "$PREV_IMAGE_ID" ]; then docker tag "$PREV_IMAGE_ID" mradio-server:rollback; echo "Tagged previous image as mradio-server:rollback"; fi'
+        - "docker compose -f docker-compose.prod.yml up -d --force-recreate mradio-server"
+        - 'HEALTHY=false; for i in $(seq 1 48); do STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" mradio-server 2>/dev/null || echo unknown); echo "  health attempt $i: $STATUS"; if [ "$STATUS" = "healthy" ]; then HEALTHY=true; break; fi; if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ]; then break; fi; sleep 5; done'
+        - 'if [ "$HEALTHY" != "true" ]; then echo "ERROR: new version failed its health check - rolling back to previous version"; docker logs --tail=100 mradio-server || true; if [ -n "$PREV_IMAGE_ID" ]; then docker tag mradio-server:rollback mradio-server:latest; docker compose -f docker-compose.prod.yml up -d --force-recreate mradio-server; echo "Rolled back to previous version"; else docker compose -f docker-compose.prod.yml stop mradio-server || true; echo "No previous image available to roll back to - service stopped"; fi; exit 1; fi'
+        - 'echo "New version is healthy and live"'
+        - "docker image prune -f"
 
   # Step 3: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
-      - "sleep 12"
       - "echo 🏥 Performing health check..."
-      - "curl -fsS https://radio.mity.in/api/health"
+      - "curl -fsS --retry 20 --retry-delay 3 --retry-connrefused --retry-all-errors https://radio.mity.in/api/health"
 
   # Step 4: Success notification to Gotify
   - name: notify-success

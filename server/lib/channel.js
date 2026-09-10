@@ -9,13 +9,29 @@ import fsHelper from "../utils/helper/fs-helper.js";
 import logger from "../utils/logger.js";
 import { getFfmpegPath, durationFormatter } from "../utils/utils.js";
 import cacheManager from "./cacheManager.js";
-import { DEFAULT_QUEUE_SIZE, DEFAULT_TRACKS_LOCATION } from "../utils/constant.js";
+import {
+    DEFAULT_QUEUE_SIZE,
+    DEFAULT_TRACKS_LOCATION,
+    RESUME_MAX_GAP_MS,
+    RESUME_MIN_REMAINING_SECONDS,
+} from "../utils/constant.js";
 import socketManager from "./socketManager.js";
 import IcecastStreamer from "./icecastStreamer.js";
 import SilenceGenerator from "./silenceGenerator.js";
 import SongQueueManager from "../utils/queue/songQueueManager.js";
+import playbackStateStore from "./playbackStateStore.js";
+import { decideResume, durationToSeconds } from "../utils/resumeDecision.js";
 
 ffmpeg.setFfmpegPath(getFfmpegPath());
+
+// Session writes are debounced: transitions can fire in quick succession and
+// the write always reads live state, so collapsing them is safe.
+const STATE_WRITE_DEBOUNCE_MS = 500;
+
+// Playback position is derived from startTime, so the only reason to rewrite
+// state periodically is to keep savedAt fresh (that is what bounds the
+// downtime estimate). One tiny write a minute is negligible.
+const STATE_HEARTBEAT_MS = 60000;
 
 export class Channel {
     constructor(id = "default", name = "Default Radio Channel", genre = "all") {
@@ -40,6 +56,144 @@ export class Channel {
         this.isIdle = false;
         this.idleTimeout = null;
         this.virtualElapsedSeconds = 0;
+        this.pendingResumeOffsetSeconds = 0;
+        this.persistTimer = null;
+        this.stateHeartbeatInterval = null;
+    }
+
+    consumeResumeOffset() {
+        const offset = this.pendingResumeOffsetSeconds || 0;
+        this.pendingResumeOffsetSeconds = 0;
+        return offset;
+    }
+
+    /**
+     * Snapshot the session for the next boot.
+     */
+    persistState() {
+        if (this.persistTimer) return;
+        this.persistTimer = setTimeout(() => {
+            this.persistTimer = null;
+            this.writeStateNow();
+        }, STATE_WRITE_DEBOUNCE_MS);
+    }
+
+    writeStateNow() {
+        if (this.persistTimer) {
+            clearTimeout(this.persistTimer);
+            this.persistTimer = null;
+        }
+
+        playbackStateStore.write(this.id, {
+            savedAt: Date.now(),
+            startTime: this.startTime,
+            playing: this.playing,
+            index: this.index,
+            currentTrack: this.currentTrack,
+            tracks: this.tracks,
+            previousTrack: this.previousTrack,
+        });
+    }
+
+    /**
+     * Move anything left in the download directory into the cache so tracks
+     */
+    migrateStrayTracks(dir) {
+        const tracksDir = path.join(process.cwd(), dir);
+        if (!fsHelper.exists(tracksDir)) return;
+
+        const files = fsHelper.listFiles(tracksDir);
+        for (const file of files) {
+            const filePath = path.join(tracksDir, file);
+            try {
+                const success = cacheManager.moveToCache(filePath, path.basename(file, '.mp3'));
+                if (!success) {
+                    fsHelper.delete(filePath);
+                }
+            } catch (error) {
+                logger.error(`[Channel:${this.id}] Error processing file ${file}:`, error);
+            }
+        }
+    }
+
+    /**
+     * Resolve a persisted track back to a playable local file.
+     */
+    resolveTrack(track) {
+        if (!track?.title) return null;
+
+        if (track.urlType === 'fallback') {
+            return track.url && fsHelper.exists(track.url) ? { ...track } : null;
+        }
+
+        const cachedPath = cacheManager.getFromCache(track.title);
+        return cachedPath ? { ...track, url: cachedPath } : null;
+    }
+
+    buildRestorableTracks(state) {
+        const savedTracks = Array.isArray(state.tracks) && state.tracks.length > 0
+            ? state.tracks
+            : (state.currentTrack ? [state.currentTrack] : []);
+
+        return savedTracks.map((saved) => {
+            const track = this.resolveTrack(saved);
+            return {
+                track: track || saved,
+                durationSeconds: durationToSeconds(saved?.duration),
+                available: !!track,
+            };
+        });
+    }
+
+    async restoreSession(dir) {
+        const state = playbackStateStore.read(this.id);
+        if (!state) return false;
+
+        // Tracks downloaded before the restart may still sit in the tracks dir.
+        this.migrateStrayTracks(dir);
+
+        const restorableTracks = this.buildRestorableTracks(state);
+        const decision = decideResume(state, {
+            now: Date.now(),
+            maxGapMs: RESUME_MAX_GAP_MS,
+            minRemainingSeconds: RESUME_MIN_REMAINING_SECONDS,
+            tracks: restorableTracks,
+        });
+
+        if (decision.action !== 'resume') {
+            logger.info(`[Channel:${this.id}] Not resuming previous session (${decision.reason})`);
+            return false;
+        }
+
+        this.tracks = restorableTracks
+            .slice(decision.index)
+            .filter((entry) => entry.available)
+            .map((entry) => entry.track);
+        this.index = 0;
+        this.currentTrack = this.tracks[0];
+        this.previousTrack = state.previousTrack ? this.resolveTrack(state.previousTrack) : null;
+        this.pendingResumeOffsetSeconds = decision.seekSeconds;
+        this.playing = true;
+
+        logger.info(`[Channel:${this.id}] Resuming "${this.currentTrack.title}" at ${decision.seekSeconds}s (skipped ${decision.skipped} track(s) while down)`);
+
+        this.ensureQueueSize();
+        return true;
+    }
+
+    isStreamAlive() {
+        if (!this.playing || this.isIdle) return true;
+        return !!(this.ffmpegProcess && this.ffmpegProcess.exitCode === null && !this.ffmpegProcess.killed);
+    }
+
+    emitSongUpdate(songData) {
+        try {
+            socketManager.emitToRoom(`channel:${this.id}`, 'newSong', songData);
+            socketManager.emit('newSong', songData); // Also emit globally for dashboard listeners
+        } catch (error) {
+            // Socket.io may not be ready during boot; never let it break playback state.
+            logger.warn(`[Channel:${this.id}] Could not emit newSong event: ${error.message}`);
+        }
     }
 
     initializeIcecast(config) {
@@ -107,6 +261,7 @@ export class Channel {
             this.playing = false;
         } finally {
             this.isTransitioning = false;
+            this.persistState();
         }
     }
 
@@ -258,7 +413,7 @@ export class Channel {
     clearSystemTracksFromBuffer() {
         if (this.tracks.length > 1) {
             let removedCount = 0;
-            const newTracks = [this.tracks[0]]; // Keep the currently playing track
+            const newTracks = [this.tracks[0]]; 
             for (let i = 1; i < this.tracks.length; i++) {
                 const track = this.tracks[i];
                 if (track.requestedBy !== 'auto' && track.requestedBy !== 'fallback' && track.requestedBy !== 'system') {
@@ -283,21 +438,7 @@ export class Channel {
             this.isDownloading = false;
 
             logger.info(`[Channel:${this.id}] Cleaning up tracks directory...`);
-            const tracksDir = path.join(process.cwd(), dir);
-            if (fsHelper.exists(tracksDir)) {
-                const files = fsHelper.listFiles(tracksDir);
-                for (const file of files) {
-                    const filePath = path.join(tracksDir, file);
-                    try {
-                        const success = cacheManager.moveToCache(filePath, path.basename(file, '.mp3'));
-                        if (!success) {
-                            fsHelper.delete(filePath);
-                        }
-                    } catch (error) {
-                        logger.error(`[Channel:${this.id}] Error processing file ${file}:`, error);
-                    }
-                }
-            }
+            this.migrateStrayTracks(dir);
 
             logger.info(`[Channel:${this.id}] Loading initial tracks...`);
 
@@ -337,6 +478,10 @@ export class Channel {
         if (this.progressInterval) {
             clearInterval(this.progressInterval);
             this.progressInterval = null;
+        }
+        if (this.stateHeartbeatInterval) {
+            clearInterval(this.stateHeartbeatInterval);
+            this.stateHeartbeatInterval = null;
         }
 
         return new Promise((resolve) => {
@@ -434,6 +579,7 @@ export class Channel {
             this.playing = false;
         } finally {
             this.isTransitioning = false;
+            this.persistState();
         }
     }
 
@@ -442,6 +588,7 @@ export class Channel {
         this.playing = false;
         this.cleanupCurrentStream();
         logger.info(`[Channel:${this.id}] Paused`);
+        this.persistState();
     }
 
     resume() {
@@ -470,6 +617,7 @@ export class Channel {
         if (this.tracks.length === 0) {
             logger.error(`[Channel:${this.id}] No tracks in queue`);
             this.playing = false;
+            this.persistState();
             return;
         }
 
@@ -478,21 +626,28 @@ export class Channel {
                 this.getNextTrack();
             }
 
+            // Offset into the track to start from - non-zero only when resuming.
+            const resumeOffsetSeconds = this.consumeResumeOffset();
+
             await this.cleanupCurrentStream();
             await new Promise(resolve => setTimeout(resolve, 50));
             
+            // Anchor the position so elapsed time reflects the resume point.
+            this.startTime = Date.now() - (resumeOffsetSeconds * 1000);
+
             // Check if active listeners exist or icecast is enabled
             if (this.clients.size === 0 && !this.useIcecast) {
                 logger.info(`[Channel:${this.id}] Starting track in idle mode (0 listeners, FFmpeg delayed until connection)`);
                 this.isIdle = true;
                 this.playing = true;
-                this.startTime = Date.now();
                 this.setupProgressTimer();
             } else {
                 this.isIdle = false;
-                this.loadTrackStream();
+                this.loadTrackStream(resumeOffsetSeconds);
                 this.start();
             }
+
+            this.startStateHeartbeat();
 
             const songData = {
                 channelId: this.id,
@@ -500,11 +655,12 @@ export class Channel {
                 duration: this.currentTrack?.duration || '00:00',
                 requestedBy: this.currentTrack?.requestedBy || 'anonymous'
             };
-            socketManager.emitToRoom(`channel:${this.id}`, 'newSong', songData);
-            socketManager.emit('newSong', songData); // Also emit globally for dashboard listeners
+            this.emitSongUpdate(songData);
         } catch (error) {
             logger.error(`[Channel:${this.id}] Error during play:`, { error });
             this.playing = false;
+        } finally {
+            this.persistState();
         }
     }
 
@@ -611,6 +767,7 @@ export class Channel {
             this.playing = false;
         } finally {
             this.isTransitioning = false;
+            this.persistState();
         }
     }
 
@@ -657,6 +814,7 @@ export class Channel {
             this.play(false);
         } finally {
             this.isTransitioning = false;
+            this.persistState();
         }
     }
 
@@ -694,6 +852,16 @@ export class Channel {
             const progress = this.calculateProgress();
             socketManager.emitToRoom(`channel:${this.id}`, 'playbackProgress', progress);
         }, 10000);
+    }
+
+    /**
+     * Keeps savedAt fresh so the downtime estimate stays accurate even after an unclean shutdown.
+     */
+    startStateHeartbeat() {
+        if (this.stateHeartbeatInterval) return;
+        this.stateHeartbeatInterval = setInterval(() => {
+            this.persistState();
+        }, STATE_HEARTBEAT_MS);
     }
 
     start() {

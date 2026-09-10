@@ -1,0 +1,30 @@
+# Dependencies (installed inside the image; host copy is platform-specific)
+node_modules
+
+# Secrets
+.env
+.env.*
+
+# Runtime state (provided at runtime via bind mounts)
+data
+cache
+media
+logs
+config
+
+# VCS / CI
+.git
+.gitignore
+.woodpecker.yml
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+
+# Local artifacts
+*.log
+Dockerfile
+docker-compose*.yml
+run.sh
+README.md
