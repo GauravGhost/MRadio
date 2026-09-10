@@ -12,6 +12,23 @@ services:
       - NODE_ENV=production
       - FFMPEG_ENV=production
       - TZ=${TZ:-Asia/Kolkata}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - X_ADMIN_API_KEY=${X_ADMIN_API_KEY:?X_ADMIN_API_KEY is required}
+      - X_ADMIN_TOKEN_KEY=${X_ADMIN_TOKEN_KEY:?X_ADMIN_TOKEN_KEY is required}
+      - SPOTIFY_CLIEND_ID=${SPOTIFY_CLIEND_ID:-}
+      - SPOTIFY_CLIEND_SECRET_ID=${SPOTIFY_CLIEND_SECRET_ID:-}
+      - SOUNDCLOUD_API_KEY=${SOUNDCLOUD_API_KEY:-}
+      - INITIAL_PLAYLIST_ID=${INITIAL_PLAYLIST_ID:-}
+      - INITIAL_PLAYLIST_SOURCE=${INITIAL_PLAYLIST_SOURCE:-}
+      - INITIAL_PLAYLIST_TITLE=${INITIAL_PLAYLIST_TITLE:-}
+      - ICECAST_HOST=${ICECAST_HOST:-}
+      - ICECAST_PORT=${ICECAST_PORT:-}
+      - ICECAST_PASSWORD=${ICECAST_PASSWORD:-}
+      - ICECAST_MOUNT=${ICECAST_MOUNT:-/radio.mp3}
+      - ICECAST_NAME=${ICECAST_NAME:-MRadio}
+      - ICECAST_DESCRIPTION=${ICECAST_DESCRIPTION:-MRadio - Multi-platform Music Streaming}
+      - ICECAST_GENRE=${ICECAST_GENRE:-Various}
+      - ICECAST_BITRATE=${ICECAST_BITRATE:-128}
     volumes:
       - /data/mradio/data:/usr/src/app/data
       - /data/mradio/cache:/usr/src/app/cache

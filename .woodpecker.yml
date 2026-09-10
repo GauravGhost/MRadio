@@ -39,6 +39,45 @@ steps:
   # Step 3: Deploy via Docker Compose
   - name: deploy
     image: appleboy/drone-ssh
+    environment:
+      APP_PORT:
+        from_secret: APP_PORT
+      TZ:
+        from_secret: TZ
+      LOG_LEVEL:
+        from_secret: LOG_LEVEL
+      X_ADMIN_API_KEY:
+        from_secret: X_ADMIN_API_KEY
+      X_ADMIN_TOKEN_KEY:
+        from_secret: X_ADMIN_TOKEN_KEY
+      SPOTIFY_CLIEND_ID:
+        from_secret: SPOTIFY_CLIEND_ID
+      SPOTIFY_CLIEND_SECRET_ID:
+        from_secret: SPOTIFY_CLIEND_SECRET_ID
+      SOUNDCLOUD_API_KEY:
+        from_secret: SOUNDCLOUD_API_KEY
+      INITIAL_PLAYLIST_ID:
+        from_secret: INITIAL_PLAYLIST_ID
+      INITIAL_PLAYLIST_SOURCE:
+        from_secret: INITIAL_PLAYLIST_SOURCE
+      INITIAL_PLAYLIST_TITLE:
+        from_secret: INITIAL_PLAYLIST_TITLE
+      ICECAST_HOST:
+        from_secret: ICECAST_HOST
+      ICECAST_PORT:
+        from_secret: ICECAST_PORT
+      ICECAST_PASSWORD:
+        from_secret: ICECAST_PASSWORD
+      ICECAST_MOUNT:
+        from_secret: ICECAST_MOUNT
+      ICECAST_NAME:
+        from_secret: ICECAST_NAME
+      ICECAST_DESCRIPTION:
+        from_secret: ICECAST_DESCRIPTION
+      ICECAST_GENRE:
+        from_secret: ICECAST_GENRE
+      ICECAST_BITRATE:
+        from_secret: ICECAST_BITRATE
     settings:
       host:
         from_secret: ORACLE_HOST
@@ -50,8 +89,30 @@ steps:
         from_secret: ORACLE_PORT
       command_timeout: 20m
       script_stop: true
+      envs:
+        - APP_PORT
+        - TZ
+        - LOG_LEVEL
+        - X_ADMIN_API_KEY
+        - X_ADMIN_TOKEN_KEY
+        - SPOTIFY_CLIEND_ID
+        - SPOTIFY_CLIEND_SECRET_ID
+        - SOUNDCLOUD_API_KEY
+        - INITIAL_PLAYLIST_ID
+        - INITIAL_PLAYLIST_SOURCE
+        - INITIAL_PLAYLIST_TITLE
+        - ICECAST_HOST
+        - ICECAST_PORT
+        - ICECAST_PASSWORD
+        - ICECAST_MOUNT
+        - ICECAST_NAME
+        - ICECAST_DESCRIPTION
+        - ICECAST_GENRE
+        - ICECAST_BITRATE
       script:
         - "echo Connected to Oracle Cloud server"
+        - 'test -n "$X_ADMIN_API_KEY" || { echo "ERROR: X_ADMIN_API_KEY secret is missing in the deploy step"; exit 1; }'
+        - 'test -n "$X_ADMIN_TOKEN_KEY" || { echo "ERROR: X_ADMIN_TOKEN_KEY secret is missing - refusing to deploy an unauthenticated admin API"; exit 1; }'
         - "cd /tmp/mradio"
         - 'PREV_IMAGE_ID=$(docker inspect --format="{{.Image}}" mradio-server 2>/dev/null || true); echo "Previous running image: $PREV_IMAGE_ID"'
         - 'for cid in $(docker ps -q --filter publish=9126); do name=$(docker inspect --format="{{.Name}}" "$cid"); if [ -n "$name" ] && [ "$name" != "/mradio-server" ]; then echo "Removing legacy container holding port 9126: $name"; docker rm -f "$cid"; fi; done'
