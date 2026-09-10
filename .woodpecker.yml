@@ -14,13 +14,35 @@ steps:
       - "echo Commit: ${CI_COMMIT_SHA}"
       - "echo Author: ${CI_COMMIT_AUTHOR}"
 
-  # Step 2: Deploy
+  # Step 2: Transfer workspace files to Oracle server
+  - name: transfer-files
+    image: appleboy/drone-scp
+    settings:
+      host:
+        from_secret: ORACLE_HOST
+      username:
+        from_secret: ORACLE_USERNAME
+      key:
+        from_secret: ORACLE_KEY
+      port:
+        from_secret: ORACLE_PORT
+      target: /tmp/mradio
+      source:
+        - Dockerfile
+        - docker-compose.prod.yml
+        - package.json
+        - package-lock.json
+        - .dockerignore
+        - server
+      rm: true
+
+  # Step 3: Deploy via Docker Compose
   - name: deploy
     image: appleboy/drone-ssh
     settings:
-      host: 
+      host:
         from_secret: ORACLE_HOST
-      username: 
+      username:
         from_secret: ORACLE_USERNAME
       key:
         from_secret: ORACLE_KEY
@@ -30,8 +52,7 @@ steps:
       script_stop: true
       script:
         - "echo Connected to Oracle Cloud server"
-        - "cd /home/ubuntu/docker/radio"
-        - "git fetch origin master && git reset --hard origin/master"
+        - "cd /tmp/mradio"
         - 'PREV_IMAGE_ID=$(docker inspect --format="{{.Image}}" mradio-server 2>/dev/null || true); echo "Previous running image: $PREV_IMAGE_ID"'
         - 'for cid in $(docker ps -q --filter publish=9126); do name=$(docker inspect --format="{{.Name}}" "$cid"); if [ -n "$name" ] && [ "$name" != "/mradio-server" ]; then echo "Removing legacy container holding port 9126: $name"; docker rm -f "$cid"; fi; done'
         - "docker compose -f docker-compose.prod.yml build mradio-server"
@@ -40,55 +61,12 @@ steps:
         - 'HEALTHY=false; for i in $(seq 1 48); do STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" mradio-server 2>/dev/null || echo unknown); echo "  health attempt $i: $STATUS"; if [ "$STATUS" = "healthy" ]; then HEALTHY=true; break; fi; if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ]; then break; fi; sleep 5; done'
         - 'if [ "$HEALTHY" != "true" ]; then echo "ERROR: new version failed its health check - rolling back to previous version"; docker logs --tail=100 mradio-server || true; if [ -n "$PREV_IMAGE_ID" ]; then docker tag mradio-server:rollback mradio-server:latest; docker compose -f docker-compose.prod.yml up -d --force-recreate mradio-server; echo "Rolled back to previous version"; else docker compose -f docker-compose.prod.yml stop mradio-server || true; echo "No previous image available to roll back to - service stopped"; fi; exit 1; fi'
         - 'echo "New version is healthy and live"'
+        - "cd ~ && rm -rf /tmp/mradio"
         - "docker image prune -f"
 
-  # Step 3: Health check
+  # Step 4: Health check
   - name: health-check
     image: curlimages/curl:latest
     commands:
       - "echo 🏥 Performing health check..."
       - "curl -fsS --retry 20 --retry-delay 3 --retry-connrefused --retry-all-errors https://radio.mity.in/api/health"
-
-  # Step 4: Success notification to Gotify
-  - name: notify-success
-    image: curlimages/curl:latest
-    commands:
-      - |
-        echo "Sending success notification to Gotify..."
-        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
-        -F "title=✅ MRadio Deployment Success" \
-        -F "message=Branch: ${CI_COMMIT_BRANCH}
-        Commit: ${CI_COMMIT_SHA:0:7}
-        Author: ${CI_COMMIT_AUTHOR}
-        
-        🎵 MRadio is now live at https://icecast.mity.in/radio.mp3" \
-        -F "priority=5"
-    environment:
-      GOTIFY_URL:
-        from_secret: gotify_url
-      GOTIFY_TOKEN:
-        from_secret: gotify_token
-    when:
-      status: success
-
-  # Step 5: Failure notification to Gotify
-  - name: notify-failure
-    image: curlimages/curl:latest
-    commands:
-      - |
-        echo "Sending failure notification to Gotify..."
-        curl -X POST "$${GOTIFY_URL}/message?token=$${GOTIFY_TOKEN}" \
-        -F "title=❌ MRadio Deployment Failed" \
-        -F "message=Branch: ${CI_COMMIT_BRANCH}
-        Commit: ${CI_COMMIT_SHA:0:7}
-        Author: ${CI_COMMIT_AUTHOR}
-        
-        Pipeline failed. Please check logs." \
-        -F "priority=10"
-    environment:
-      GOTIFY_URL:
-        from_secret: gotify_url
-      GOTIFY_TOKEN:
-        from_secret: gotify_token
-    when:
-      status: failure
