@@ -11,11 +11,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
-# Copy package.json and package-lock.json
+RUN pip3 install --no-cache-dir --break-system-packages --upgrade yt-dlp \
+    || (apt-get update && apt-get install -y yt-dlp && rm -rf /var/lib/apt/lists/*) \
+    && mkdir -p /opt/yt-dlp \
+    && ln -sf "$(command -v yt-dlp)" /opt/yt-dlp/yt-dlp \
+    && /opt/yt-dlp/yt-dlp --version
+
+ENV YOUTUBE_DL_DIR=/opt/yt-dlp
+
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+RUN npm install --ignore-scripts
 
 # Copy the rest of the application files
 COPY . .
