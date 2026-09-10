@@ -3,11 +3,13 @@ FROM node:18
 # Set the working directory
 WORKDIR /usr/src/app
 
+# wget is required by the compose healthcheck probe
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     dnsutils \
     ffmpeg \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 
