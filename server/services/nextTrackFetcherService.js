@@ -48,7 +48,7 @@ const checkAndRefreshMetadata = async (playlist) => {
     if (now - metadataDate > TWO_DAYS_MS) {
         logger.info("Updating the metadata for : " + playlist.title);
         const apiService = new Service();
-        await apiService.removeDefaultPlaylist({ index: playlist.index });
+        await apiService.removeDefaultPlaylist({ playlistId: playlist.playlistId, channelId: playlist.channelId || null });
         await apiService.addDefaultPlaylist({
             playlistId: playlist.playlistId,
             title: playlist.title,
@@ -81,7 +81,9 @@ const emptySongQueueHandler = async (channelId) => {
                 ? p.channelId === channelId && p.isActive
                 : !p.channelId && p.isActive && (genre === "all" || p.genre === genre));
 
-        await Promise.all(activePlaylists.map(playlist => checkAndRefreshMetadata(playlist)));
+        for (const playlist of activePlaylists) {
+            await checkAndRefreshMetadata(playlist);
+        }
 
         const filter = {
             isActive: true,

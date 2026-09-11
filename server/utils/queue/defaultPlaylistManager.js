@@ -12,12 +12,16 @@ class DefaultPlaylistManager extends BaseQueueManager {
             formatFunction: (item) => ({
                 ...item,
                 metadataUpdatedAt: item.metadataUpdatedAt || new Date().toISOString()
-            }),
-            duplicateCheckKey: "playlistId"
+            })
         });
     }
-    addToQueue(item) {
-        return this.addToQueue(item);
+
+    // A playlist is only a duplicate within the same scope (global pool or a single channel).
+    isDuplicate(item) {
+        return this.items.some(existing =>
+            existing.playlistId === item.playlistId &&
+            (existing.channelId ?? null) === (item.channelId ?? null)
+        );
     }
 }
 

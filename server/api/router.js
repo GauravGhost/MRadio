@@ -82,11 +82,16 @@ router.delete("/channels/:channelId/queue/songs/user/:requestedBy", requireUser,
 router.post("/channels/:channelId/queue/playlists", requireUser, addPlaylistToQueue);
 router.delete("/channels/:channelId/queue", requireUser, clearQueue);
 
-// 4. System Default Playlists Routes
+// 4. Default Playlist Routes
 router.get("/playlists/default", requireUser, getDefaultPlaylists);
-router.post("/playlists/default", requireUser, addDefaultPlaylist);
-router.delete("/playlists/default/:index", requireUser, removeDefaultPlaylist);
-router.patch("/playlists/default/:index/status", requireUser, updateDefaultPlaylistStatus);
+router.post("/playlists/default", requireAdmin, addDefaultPlaylist);
+router.delete("/playlists/default/:index", requireAdmin, removeDefaultPlaylist);
+router.patch("/playlists/default/:index/status", requireAdmin, updateDefaultPlaylistStatus);
+// Channel Playlist Routes
+router.get("/channels/:channelId/playlists/default", requireUser, getDefaultPlaylists);
+router.post("/channels/:channelId/playlists/default", requireUser, addDefaultPlaylist);
+router.delete("/channels/:channelId/playlists/default/:index", requireUser, removeDefaultPlaylist);
+router.patch("/channels/:channelId/playlists/default/:index/status", requireUser, updateDefaultPlaylistStatus);
 
 // 5. Blocklist Routes
 router.get("/blocklist", requireUser, getBlocklist);

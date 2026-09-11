@@ -224,12 +224,24 @@ curl -X POST http://localhost:9126/api/channels/main/queue/songs \
 
 ### Playlist Endpoints
 
+The **global pool** is the fallback for every channel that has no playlists of its own, so only the
+admin may write to it. A **channel pool** is scoped to one channel and requires a token assigned to
+that channel. Global routes never read `channelId` from the body — the route alone decides the scope.
+
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/api/playlists/default` | List default playlists | Token |
-| POST | `/api/playlists/default` | Add default playlist | Token |
-| DELETE | `/api/playlists/default/:index` | Remove playlist | Token |
-| PATCH | `/api/playlists/default/:index/status` | Toggle playlist | Token |
+| GET | `/api/playlists/default` | List all default playlists (global + channel) | Token |
+| POST | `/api/playlists/default` | Add a **global** playlist | Admin |
+| DELETE | `/api/playlists/default/:index` | Remove a **global** playlist | Admin |
+| PATCH | `/api/playlists/default/:index/status` | Toggle a **global** playlist | Admin |
+| GET | `/api/channels/:channelId/playlists/default` | List a channel's playlists | Token (assigned channel) |
+| POST | `/api/channels/:channelId/playlists/default` | Add a playlist to a channel | Token (assigned channel) |
+| DELETE | `/api/channels/:channelId/playlists/default/:index` | Remove a channel's playlist | Token (assigned channel) |
+| PATCH | `/api/channels/:channelId/playlists/default/:index/status` | Toggle a channel's playlist | Token (assigned channel) |
+
+`:index` is the playlist's `index` as returned by the matching `GET` (its position in the flat store,
+global for the admin routes). Removing or toggling a playlist that belongs to a different scope
+returns `403`; a channel reaching zero of its own playlists is allowed and falls back to the global pool.
 
 ### Blocklist Endpoints
 

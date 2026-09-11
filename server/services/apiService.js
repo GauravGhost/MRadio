@@ -10,6 +10,20 @@ import { DEFAULT_TOKEN_ROLE, TOKEN_ROLES } from "../utils/constant.js";
 import DefaultPlaylistMetadataManager from "../utils/queue/defaultPlaylistMetadataManager.js";
 import DefaultPlaylistManager from "../utils/queue/defaultPlaylistManager.js";
 
+const playlistNotFoundError = () => {
+    const error = new Error("Playlist not found");
+    error.statusCode = 404;
+    return error;
+};
+
+const playlistScopeError = (channelId) => {
+    const error = new Error(channelId
+        ? `Forbidden: playlist does not belong to channel '${channelId}'`
+        : "Forbidden: playlist is not part of the global pool");
+    error.statusCode = 403;
+    return error;
+};
+
 class Service {
     constructor() {
         this.blockListManager = new BlockListManager();
@@ -382,27 +396,44 @@ class Service {
         }
     }
 
-    async removeDefaultPlaylist({ index }) {
+    async removeDefaultPlaylist({ index, playlistId, channelId = null }) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
         const defaultPlaylistMetadataStore = new DefaultPlaylistMetadataManager();
-        
-        const len = defaultPlaylistStore.getLength();
-        if (len <= 1) {
-            throw new Error("Cannot remove default playlist. There must be at least one default playlist.");
+
+        const allPlaylists = defaultPlaylistStore.getAll();
+        const position = playlistId
+            ? allPlaylists.findIndex(p => p.playlistId === playlistId && (p.channelId ?? null) === (channelId ?? null))
+            : index - 1;
+        const target = allPlaylists[position];
+        if (!target) {
+            throw playlistNotFoundError();
         }
-        
-        const removedPlaylist = defaultPlaylistStore.removeAtIndex(index);
+        if ((target.channelId ?? null) !== (channelId ?? null)) {
+            throw playlistScopeError(channelId);
+        }
+
+        const scopeCount = allPlaylists.filter(p => (p.channelId ?? null) === (channelId ?? null)).length;
+        if (channelId === null && scopeCount <= 1) {
+            throw new Error("Cannot remove default playlist. There must be at least one global default playlist.");
+        }
+
+        const removedPlaylist = defaultPlaylistStore.removeAtIndex(position + 1);
         if (!removedPlaylist) {
             throw new Error("Failed to remove playlist");
         }
 
         const allMetadataEntries = defaultPlaylistMetadataStore.getAll();
-        
+
         const indexesToRemove = allMetadataEntries
-            .map((entry, idx) => entry.playlistId === removedPlaylist.playlistId ? idx + 1 : null)
+            .map((entry, idx) => (
+                entry.playlistId === removedPlaylist.playlistId &&
+                (entry.channelId ?? null) === (removedPlaylist.channelId ?? null)
+                    ? idx + 1
+                    : null
+            ))
             .filter(idx => idx !== null)
             .sort((a, b) => b - a);
-        
+
         for (const idx of indexesToRemove) {
             defaultPlaylistMetadataStore.removeAtIndex(idx);
         }
@@ -410,26 +441,35 @@ class Service {
         return removedPlaylist;
     }
 
-    async getDefaultPlaylist() {
+    async getDefaultPlaylist({ channelId } = {}) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
-        return defaultPlaylistStore.getAll();
+        const withIndex = defaultPlaylistStore.getAll().map((playlist, idx) => ({ ...playlist, index: idx + 1 }));
+        if (channelId === undefined) {
+            return withIndex;
+        }
+        return withIndex.filter(playlist => (playlist.channelId ?? null) === (channelId ?? null));
     }
 
-    async updatePlaylistStatus({ index, isActive }) {
+    async updatePlaylistStatus({ index, isActive, channelId = null }) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
         const allPlaylists = defaultPlaylistStore.getAll();
-        
+
         const actualIndex = index - 1;
-        
-        if (actualIndex < 0 || actualIndex >= allPlaylists.length) {
-            throw new Error("Invalid playlist index");
+        const target = allPlaylists[actualIndex];
+        if (!target) {
+            throw playlistNotFoundError();
+        }
+        if ((target.channelId ?? null) !== (channelId ?? null)) {
+            throw playlistScopeError(channelId);
         }
 
         if (!isActive) {
-            const activePlaylistCount = allPlaylists.filter((playlist, idx) => 
-                idx !== actualIndex && playlist.isActive
+            const activePlaylistCount = allPlaylists.filter((playlist, idx) =>
+                idx !== actualIndex &&
+                (playlist.channelId ?? null) === (channelId ?? null) &&
+                playlist.isActive
             ).length;
-            
+
             if (activePlaylistCount === 0) {
                 throw new Error("Cannot deactivate playlist: At least one playlist must remain active");
             }

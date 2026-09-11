@@ -279,7 +279,7 @@ export const clearQueue = async (req, res) => {
 
 export const getDefaultPlaylists = async (req, res) => {
     try {
-        const response = await service.getDefaultPlaylist();
+        const response = await service.getDefaultPlaylist({ channelId: req.params.channelId });
         res.status(200).json(successRes(response, "Default playlists fetched successfully"));
     } catch (error) {
         logger.error("Error in getDefaultPlaylists API", { error: error.message });
@@ -293,11 +293,13 @@ export const addDefaultPlaylist = async (req, res) => {
         if (!playlistId || !title || !source) {
             return res.status(400).json(errorRes(null, "Missing required fields: playlistId, title, source", "BAD_REQUEST"));
         }
-        const response = await service.addDefaultPlaylist(req.body);
+        // no :channelId means the global pool.
+        const channelId = req.params.channelId ?? null;
+        const response = await service.addDefaultPlaylist({ ...req.body, channelId });
         res.status(201).json(successRes(response, `Added ${response.total} tracks to Default Playlist: ${title}`));
     } catch (error) {
         logger.error("Error in addDefaultPlaylist API", { error: error.message });
-        res.status(400).json(errorRes(error, error.message || "Failed to add default playlist", "BAD_REQUEST"));
+        res.status(error.statusCode || 400).json(errorRes(error, error.message || "Failed to add default playlist", "BAD_REQUEST"));
     }
 };
 
@@ -307,11 +309,12 @@ export const removeDefaultPlaylist = async (req, res) => {
         if (isNaN(index)) {
             return res.status(400).json(errorRes(null, "Invalid index parameter", "BAD_REQUEST"));
         }
-        const response = await service.removeDefaultPlaylist({ index });
+        const channelId = req.params.channelId ?? null;
+        const response = await service.removeDefaultPlaylist({ index, channelId });
         res.status(200).json(successRes(response, "Default playlist removed successfully"));
     } catch (error) {
         logger.error("Error in removeDefaultPlaylist API", { error: error.message });
-        res.status(400).json(errorRes(error, error.message || "Failed to remove default playlist", "BAD_REQUEST"));
+        res.status(error.statusCode || 400).json(errorRes(error, error.message || "Failed to remove default playlist", "BAD_REQUEST"));
     }
 };
 
@@ -322,11 +325,12 @@ export const updateDefaultPlaylistStatus = async (req, res) => {
         if (isNaN(index) || isActive === undefined) {
             return res.status(400).json(errorRes(null, "Index parameter and isActive boolean state are required", "BAD_REQUEST"));
         }
-        const response = await service.updatePlaylistStatus({ index, isActive });
+        const channelId = req.params.channelId ?? null;
+        const response = await service.updatePlaylistStatus({ index, isActive, channelId });
         res.status(200).json(successRes(response, "Playlist status updated successfully"));
     } catch (error) {
         logger.error("Error in updateDefaultPlaylistStatus API", { error: error.message });
-        res.status(400).json(errorRes(error, error.message || "Failed to update default playlist status", "BAD_REQUEST"));
+        res.status(error.statusCode || 400).json(errorRes(error, error.message || "Failed to update default playlist status", "BAD_REQUEST"));
     }
 };
 

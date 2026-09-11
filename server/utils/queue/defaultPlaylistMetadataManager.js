@@ -18,9 +18,16 @@ class DefaultPlaylistMetadataManager extends BaseQueueManager {
             formatFunction: (item) => ({
                 ...item,
                 duration: item.duration ? durationFormatter(item.duration) : "00:00"
-            }),
-            duplicateCheckKey: "url"
+            })
         });
+    }
+
+    // A track is only a duplicate within the same scope (global pool or a single channel).
+    isDuplicate(item) {
+        return this.items.some(existing =>
+            existing.url === item.url &&
+            (existing.channelId ?? null) === (item.channelId ?? null)
+        );
     }
 
     // Alias methods to match existing API
@@ -48,16 +55,16 @@ class DefaultPlaylistMetadataManager extends BaseQueueManager {
             // Filter by song metadata
             if (filters.urlType && item.urlType !== filters.urlType) matches = false;
             if (filters.playlistId && item.playlistId !== filters.playlistId) matches = false;
+            // channelId null/undefined means the global pool
+            if (filters.channelId !== undefined && (item.channelId ?? null) !== (filters.channelId ?? null)) matches = false;
 
             // Filter by playlist metadata - requires checking against playlist data
             if (needsPlaylist) {
-                const playlist = this.getPlaylistMetadata(item.playlistId);
+                const playlist = this.getPlaylistMetadata(item.playlistId, item.channelId ?? null);
 
                 if (playlist) {
                     if (filters.isActive !== undefined && playlist.isActive !== filters.isActive) matches = false;
                     if (filters.genre && playlist.genre !== filters.genre) matches = false;
-                    // channelId null/undefined means the global pool
-                    if (filters.channelId !== undefined && (playlist.channelId ?? null) !== (filters.channelId ?? null)) matches = false;
                 } else {
                     matches = false;
                 }
@@ -66,10 +73,12 @@ class DefaultPlaylistMetadataManager extends BaseQueueManager {
         });
     }
 
-    getPlaylistMetadata(playlistId) {
+    getPlaylistMetadata(playlistId, channelId = null) {
         try {
             const playlists = getDefaultPlaylistJson();
-            return playlists.find(p => p.playlistId === playlistId);
+            return playlists.find(p =>
+                p.playlistId === playlistId && (p.channelId ?? null) === (channelId ?? null)
+            ) || null;
         } catch (error) {
             console.error('Error getting playlist metadata:', error);
             return null;
