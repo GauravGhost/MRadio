@@ -7,7 +7,7 @@ export const TOKEN_ROLES = {
     USER: "user"
 };
 export const DEFAULT_TOKEN_ROLE = TOKEN_ROLES.USER;
-export const DEFAULT_CHANNEL_ID = "default";
+export const MAIN_CHANNEL_ID = "main";
 
 export const DEFAULT_CACHE_LOCATION = "cache";
 

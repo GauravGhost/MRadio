@@ -82,7 +82,7 @@ export const updateChannel = async (req, res) => {
 export const restartChannel = async (req, res) => {
     try {
         const { channelId } = req.params;
-        const response = await service.restartChannel(channelId || 'default');
+        const response = await service.restartChannel(channelId);
         res.status(200).json(successRes(response, "Channel playback restarted successfully"));
     } catch (error) {
         logger.error("Error in restartChannel API", { error: error.message });
@@ -98,7 +98,7 @@ export const restartChannel = async (req, res) => {
 
 export const getCurrentSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.getCurrentSong(channelId);
         res.status(200).json(successRes(response, "Current track fetched successfully"));
     } catch (error) {
@@ -109,7 +109,7 @@ export const getCurrentSong = async (req, res) => {
 
 export const getUpcomingSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.getUpcomingSong(channelId);
         res.status(200).json(successRes(response, "Upcoming track fetched successfully"));
     } catch (error) {
@@ -120,7 +120,7 @@ export const getUpcomingSong = async (req, res) => {
 
 export const skipSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         await service.skip(channelId);
         res.status(200).json(successRes({ skipped: true, channelId }, "Skipped current song. Playing next track."));
     } catch (error) {
@@ -131,7 +131,7 @@ export const skipSong = async (req, res) => {
 
 export const previousSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         await service.previous(channelId);
         res.status(200).json(successRes({ previous: true, channelId }, "Switched to previous song."));
     } catch (error) {
@@ -146,7 +146,7 @@ export const seekSong = async (req, res) => {
         if (seconds === undefined || isNaN(+seconds)) {
             return res.status(400).json(errorRes(null, "Invalid or missing 'seconds' parameter", "BAD_REQUEST"));
         }
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.seekSong(parseInt(seconds), channelId);
         res.status(200).json(successRes({ seeked: response, seconds: parseInt(seconds), channelId }, "Seek operation completed"));
     } catch (error) {
@@ -157,7 +157,7 @@ export const seekSong = async (req, res) => {
 
 export const pauseSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.pauseSong(channelId);
         res.status(200).json(successRes(response, "Playback paused successfully"));
     } catch (error) {
@@ -168,7 +168,7 @@ export const pauseSong = async (req, res) => {
 
 export const resumeSong = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.resumeSong(channelId);
         res.status(200).json(successRes(response, "Playback resumed successfully"));
     } catch (error) {
@@ -185,7 +185,7 @@ export const resumeSong = async (req, res) => {
 
 export const getQueueList = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.getQueueList(channelId);
         res.status(200).json(successRes(response, "Queue list fetched successfully"));
     } catch (error) {
@@ -199,7 +199,7 @@ export const addSongToQueue = async (req, res) => {
         if (!req.body?.songName) {
             return res.status(400).json(errorRes(null, "Song name is required", "BAD_REQUEST"));
         }
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const isTop = req.body.position === "top";
         const response = isTop 
             ? await service.addSongToTop({ ...req.body, channelId })
@@ -218,7 +218,7 @@ export const removeSongFromQueue = async (req, res) => {
         if (isNaN(index)) {
             return res.status(400).json(errorRes(null, "Invalid song index", "BAD_REQUEST"));
         }
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.removeFromQueue({ index, channelId });
         res.status(200).json(successRes(response, "Song removed from queue successfully"));
     } catch (error) {
@@ -233,7 +233,7 @@ export const removeLastSongRequestedByUser = async (req, res) => {
         if (!requestedBy) {
             return res.status(400).json(errorRes(null, "Username parameter 'requestedBy' is required", "BAD_REQUEST"));
         }
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.removeLastSongRequestedByUser({ requestedBy, channelId });
         res.status(200).json(successRes(response, `Removed last song requested by user @${requestedBy}`));
     } catch (error) {
@@ -247,7 +247,7 @@ export const addPlaylistToQueue = async (req, res) => {
         if (!req.body?.playlistId) {
             return res.status(400).json(errorRes(null, "Playlist ID is required", "BAD_REQUEST"));
         }
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const isTop = req.body.position === "top";
         const response = isTop
             ? await service.addPlaylistToTop({ ...req.body, channelId })
@@ -262,7 +262,7 @@ export const addPlaylistToQueue = async (req, res) => {
 
 export const clearQueue = async (req, res) => {
     try {
-        const channelId = req.params.channelId || 'default';
+        const channelId = req.params.channelId;
         const response = await service.clearQueue(channelId);
         res.status(200).json(successRes(response, "Channel queue cleared successfully"));
     } catch (error) {
@@ -351,7 +351,10 @@ export const blockSong = async (req, res) => {
         const { target, songName, requestedBy, channelId } = req.body;
         let response;
         if (target === "current" || !songName) {
-            response = await service.blockCurrentSong(requestedBy, channelId || 'default');
+            if (!channelId) {
+                return res.status(400).json(errorRes(null, "Missing required field: channelId", "BAD_REQUEST"));
+            }
+            response = await service.blockCurrentSong(requestedBy, channelId);
         } else {
             response = await service.blockSongBySongName(songName, requestedBy);
         }
@@ -502,8 +505,11 @@ export const updateTokenChannels = async (req, res) => {
 
 export const getIcecastStatus = async (req, res) => {
     try {
-        const defaultChannel = channelManager.getChannel('default');
-        const status = defaultChannel.getIcecastStatus();
+        const channel = channelManager.getChannel(req.params.channelId);
+        if (!channel) {
+            return res.status(404).json(errorRes(null, `Channel '${req.params.channelId}' not found`, "NOT_FOUND"));
+        }
+        const status = channel.getIcecastStatus();
         res.status(200).json(successRes(status, "Icecast status fetched successfully"));
     } catch (error) {
         logger.error("Error in getIcecastStatus API", { error: error.message });
@@ -514,8 +520,6 @@ export const getIcecastStatus = async (req, res) => {
 export const getHealth = async (req, res) => {
     try {
         const report = channelManager.getHealthReport();
-        const defaultChannel = channelManager.getChannel('default');
-        const icecast = defaultChannel ? defaultChannel.getIcecastStatus() : null;
 
         const payload = {
             status: report.healthy ? "healthy" : "unhealthy",
@@ -523,7 +527,7 @@ export const getHealth = async (req, res) => {
             timestamp: new Date().toISOString(),
             activeChannels: report.channels.length,
             playingChannels: report.channels.filter(c => c.playing).length,
-            icecastConnected: !!icecast?.connected,
+            icecastConnected: report.channels.some(c => c.icecastConnected),
             unhealthyChannels: report.unhealthy,
             channels: report.channels,
             version: "1.0.0",

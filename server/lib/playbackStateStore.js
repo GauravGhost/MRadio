@@ -12,12 +12,15 @@ class PlaybackStateStore {
         this.baseDir = path.join(process.cwd(), baseDir);
     }
 
-    getFilePath(channelId = "default") {
-        const safeId = String(channelId).replace(/[^a-zA-Z0-9_-]/g, "") || "default";
+    getFilePath(channelId) {
+        const safeId = String(channelId).replace(/[^a-zA-Z0-9_-]/g, "");
+        if (!safeId) {
+            throw new Error("A channel id is required to resolve a playback state file");
+        }
         return path.join(this.baseDir, `${safeId}.json`);
     }
 
-    read(channelId = "default") {
+    read(channelId) {
         try {
             const filePath = this.getFilePath(channelId);
             if (!fsHelper.exists(filePath)) return null;
@@ -33,7 +36,7 @@ class PlaybackStateStore {
         }
     }
 
-    write(channelId = "default", state) {
+    write(channelId, state) {
         try {
             if (!fsHelper.exists(this.baseDir)) {
                 fsHelper.createDirectory(this.baseDir);
@@ -51,7 +54,7 @@ class PlaybackStateStore {
         }
     }
 
-    clear(channelId = "default") {
+    clear(channelId) {
         try {
             const filePath = this.getFilePath(channelId);
             if (fsHelper.exists(filePath)) {

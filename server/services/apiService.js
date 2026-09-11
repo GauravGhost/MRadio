@@ -6,13 +6,21 @@ import BlockListManager from "../utils/queue/blockListManager.js";
 import { generatePlaylistMetadata, generateSongMetadata } from "./metadataFetcherService.js";
 import { durationFormatter } from "../utils/utils.js";
 import logger from "../utils/logger.js";
-import { DEFAULT_CHANNEL_ID, DEFAULT_QUEUE_SIZE, DEFAULT_TOKEN_ROLE, TOKEN_ROLES } from "../utils/constant.js";
+import { DEFAULT_TOKEN_ROLE, TOKEN_ROLES } from "../utils/constant.js";
 import DefaultPlaylistMetadataManager from "../utils/queue/defaultPlaylistMetadataManager.js";
 import DefaultPlaylistManager from "../utils/queue/defaultPlaylistManager.js";
 
 class Service {
     constructor() {
         this.blockListManager = new BlockListManager();
+    }
+
+    resolveChannel(channelId) {
+        const channel = channelManager.getChannel(channelId);
+        if (!channel) {
+            throw new Error(`Channel '${channelId}' not found`);
+        }
+        return channel;
     }
 
     /**
@@ -47,8 +55,8 @@ class Service {
      * ==========================================
      */
 
-    async getCurrentSong(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async getCurrentSong(channelId) {
+        const ch = this.resolveChannel(channelId);
         if (!ch.currentTrack) {
             return { channelId: ch.id, title: "No Track Playing", duration: "00:00", requestedBy: "system" };
         }
@@ -57,8 +65,8 @@ class Service {
         return { channelId: ch.id, title, duration: formattedDuration, requestedBy };
     }
 
-    async getUpcomingSong(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async getUpcomingSong(channelId) {
+        const ch = this.resolveChannel(channelId);
         if (ch.tracks.length <= 1) {
             return { channelId: ch.id, title: "None", duration: "00:00", requestedBy: "system" };
         }
@@ -67,32 +75,32 @@ class Service {
         return { channelId: ch.id, title, duration: formattedDuration, requestedBy };
     }
 
-    async seekSong(seconds, channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async seekSong(seconds, channelId) {
+        const ch = this.resolveChannel(channelId);
         await ch.seek(seconds);
         return true;
     }
 
-    async skip(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async skip(channelId) {
+        const ch = this.resolveChannel(channelId);
         await ch.skip();
         return true;
     }
 
-    async previous(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async previous(channelId) {
+        const ch = this.resolveChannel(channelId);
         await ch.previous();
         return true;
     }
 
-    async pauseSong(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async pauseSong(channelId) {
+        const ch = this.resolveChannel(channelId);
         ch.pause();
         return ch.getStatus();
     }
 
-    async resumeSong(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async resumeSong(channelId) {
+        const ch = this.resolveChannel(channelId);
         ch.resume();
         return ch.getStatus();
     }
@@ -103,8 +111,8 @@ class Service {
      * ==========================================
      */
 
-    async getQueueList(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async getQueueList(channelId) {
+        const ch = this.resolveChannel(channelId);
         const songQueue = new SongQueueManager(channelId);
         const trackList = ch.tracks;
         const queueSongList = songQueue.printQueue();
@@ -121,7 +129,7 @@ class Service {
         });
     }
 
-    async addSongToQueue({ songName, requestedBy = "anonymous", force, preference, channelId = 'default' }) {
+    async addSongToQueue({ songName, requestedBy = "anonymous", force, preference, channelId }) {
         const metadata = await generateSongMetadata(songName, requestedBy, force, preference);
         const isBlocked = await this.isSongBlocked(metadata.title);
         if (isBlocked) {
@@ -130,13 +138,13 @@ class Service {
         const songQueue = new SongQueueManager(channelId);
         songQueue.addToQueue(metadata);
         
-        const ch = channelManager.getChannel(channelId);
-        if (ch) ch.clearSystemTracksFromBuffer();
+        const ch = this.resolveChannel(channelId);
+        ch.clearSystemTracksFromBuffer();
         
         return { channelId, title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
-    async addSongToTop({ songName, requestedBy = "anonymous", force, preference, channelId = 'default' }) {
+    async addSongToTop({ songName, requestedBy = "anonymous", force, preference, channelId }) {
         const metadata = await generateSongMetadata(songName, requestedBy, force, preference);
         const isBlocked = await this.isSongBlocked(metadata.title);
         if (isBlocked) {
@@ -145,13 +153,13 @@ class Service {
         const songQueue = new SongQueueManager(channelId);
         songQueue.addToFront(metadata);
 
-        const ch = channelManager.getChannel(channelId);
-        if (ch) ch.clearSystemTracksFromBuffer();
+        const ch = this.resolveChannel(channelId);
+        ch.clearSystemTracksFromBuffer();
         
         return { channelId, title: metadata.title, duration: metadata.duration, requestedBy };
     }
 
-    async addPlaylistToQueue({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId = 'default' }) {
+    async addPlaylistToQueue({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId }) {
         const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
@@ -159,13 +167,13 @@ class Service {
         const songQueue = new SongQueueManager(channelId);
         songQueue.addManyToQueue(metadata);
         
-        const ch = channelManager.getChannel(channelId);
-        if (ch) ch.clearSystemTracksFromBuffer();
+        const ch = this.resolveChannel(channelId);
+        ch.clearSystemTracksFromBuffer();
         
         return { channelId, added: true, total: metadata.length };
     }
 
-    async addPlaylistToTop({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId = 'default' }) {
+    async addPlaylistToTop({ source = "youtube", type = "playlist", playlistId, requestedBy = "anonymous", channelId }) {
         const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
@@ -173,14 +181,14 @@ class Service {
         const songQueue = new SongQueueManager(channelId);
         songQueue.addManyToTop(metadata);
         
-        const ch = channelManager.getChannel(channelId);
-        if (ch) ch.clearSystemTracksFromBuffer();
+        const ch = this.resolveChannel(channelId);
+        ch.clearSystemTracksFromBuffer();
         
         return { channelId, added: true, total: metadata.length };
     }
 
-    async removeFromQueue({ index, channelId = 'default' }) {
-        const ch = channelManager.getChannel(channelId);
+    async removeFromQueue({ index, channelId }) {
+        const ch = this.resolveChannel(channelId);
         const trackList = ch.tracks || [];
         if (index <= trackList.length) {
             throw new Error(`Cannot remove actively buffered track #${index}. Use skip to advance.`);
@@ -193,7 +201,7 @@ class Service {
         return { channelId, title: removedItem.title, duration: removedItem.duration, requestedBy: removedItem.requestedBy };
     }
 
-    async removeLastSongRequestedByUser({ requestedBy, channelId = 'default' }) {
+    async removeLastSongRequestedByUser({ requestedBy, channelId }) {
         if (!requestedBy) {
             throw new Error("Username is required");
         }
@@ -207,8 +215,8 @@ class Service {
         return { channelId, title: removedItem.title, duration: removedItem.duration, requestedBy: removedItem.requestedBy };
     }
 
-    async clearQueue(channelId = 'default') {
-        const ch = channelManager.getChannel(channelId);
+    async clearQueue(channelId) {
+        const ch = this.resolveChannel(channelId);
         ch.clearQueue();
         const songQueue = new SongQueueManager(channelId);
         songQueue.clear();
@@ -234,7 +242,7 @@ class Service {
         return [...new Set(channels)];
     }
 
-    async generateToken(username, role = DEFAULT_TOKEN_ROLE, channels = [DEFAULT_CHANNEL_ID]) {
+    async generateToken(username, role = DEFAULT_TOKEN_ROLE, channels) {
         if (!Object.values(TOKEN_ROLES).includes(role)) {
             throw new Error(`Invalid role '${role}'. Allowed roles: ${Object.values(TOKEN_ROLES).join(", ")}`);
         }
@@ -275,7 +283,7 @@ class Service {
      * ==========================================
      */
 
-    async blockCurrentSong(requestedBy = "anonymous", channelId = 'default') {
+    async blockCurrentSong(requestedBy = "anonymous", channelId) {
         try {
             const songDetail = await this.getCurrentSong(channelId);
             return await this.blockListManager.blockCurrentSong(songDetail.title, requestedBy);

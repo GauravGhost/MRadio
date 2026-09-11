@@ -26,6 +26,14 @@ const resolveRequestedChannelId = (req) => req.params?.channelId || req.body?.ch
 
 const channelExists = (channelId) => channelManager.getChannel(channelId)?.id === channelId;
 
+export const requireChannel = (req, res, next) => {
+    const channelId = req.params?.channelId;
+    if (!channelId || !channelExists(channelId)) {
+        return res.status(404).json(errorRes(null, `Channel '${channelId}' not found`, 'NOT_FOUND'));
+    }
+    next();
+};
+
 
 export const requireUser = (req, res, next) => {
     const identity = resolveIdentity(req);
@@ -36,7 +44,6 @@ export const requireUser = (req, res, next) => {
     const channelId = resolveRequestedChannelId(req);
     const isRestrictedToken = identity.kind === "token" && identity.record.role !== TOKEN_ROLES.ADMIN;
 
-    // Check assignment before existence so restricted tokens can't probe for channel ids.
     if (isRestrictedToken && channelId && !identity.record.channels.includes(channelId)) {
         return res.status(403).json(errorRes(null, `Forbidden: channel '${channelId}' is not assigned to this token`, 'FORBIDDEN'));
     }

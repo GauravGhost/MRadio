@@ -13,10 +13,10 @@ class SocketManager {
         return SocketManager.instance;
     }
 
-    initialize(server, queue) {
+    initialize(server) {
         if (!io) {
             io = new Server(server);
-            this.queue = queue;
+            this.queue = {};
             this._setupSocketEvents();
         }
         return io;
@@ -67,7 +67,8 @@ class SocketManager {
                 this.connectedClients.delete(socket.id);
             });
 
-            socket.on('joinChannel', (channelId = 'default') => {
+            socket.on('joinChannel', (channelId) => {
+                if (!channelId) return;
                 const room = `channel:${channelId}`;
                 socket.join(room);
                 console.log(`Socket ${socket.id} joined ${room}`);

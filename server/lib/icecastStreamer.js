@@ -9,10 +9,10 @@ class IcecastStreamer {
             host: config.host,
             port: config.port,
             password: config.password,
-            mount: config.mount || '/radio.mp3',
-            name: config.name || 'MRadio',
-            description: config.description || 'MRadio Stream',
-            genre: config.genre || 'Various',
+            mount: config.mount,
+            name: config.name,
+            description: config.description,
+            genre: config.genre,
             bitrate: config.bitrate || '128',
             sampleRate: config.sampleRate || '44100',
             channels: config.channels || '2'
@@ -54,7 +54,7 @@ class IcecastStreamer {
             
             logger.info(`Connecting to Icecast server at ${this.config.host}:${this.config.port}${this.config.mount}`);
 
-            // FFmpeg arguments for Icecast streaming with better error handling
+            // FFmpeg arguments for Icecast streaming
             const ffmpegArgs = [
                 '-hide_banner',
                 '-loglevel', 'warning',
@@ -94,18 +94,14 @@ class IcecastStreamer {
                 windowsHide: true
             });
 
-            // Create input stream with high water mark for better buffering
             this.inputStream = new PassThrough({ highWaterMark: 64 * 1024 });
             this.inputStream.pipe(this.ffmpegProcess.stdin);
 
-            // Flush any buffered data
             this.flushBuffer();
 
-            // Handle FFmpeg stderr for debugging
             this.ffmpegProcess.stderr.on('data', (data) => {
                 const message = data.toString();
-                
-                // Ignore certain non-critical errors during track transitions
+
                 if (message.includes('Header missing') || 
                     message.includes('Invalid data found when processing input')) {
                     logger.debug(`FFmpeg warning (ignored during transition): ${message}`);
@@ -113,7 +109,6 @@ class IcecastStreamer {
                 }
                 
                 if (message.includes('error') || message.includes('Error')) {
-                    // Don't treat HTTP 403 as a critical error if we're already connected
                     if (message.includes('403 Forbidden') && this.isConnected) {
                         logger.debug('Received 403 during active connection, ignoring');
                         return;
@@ -165,7 +160,6 @@ class IcecastStreamer {
                 }
             }, 2000);
         }).finally(() => {
-            // Clear the promise reference when done
             this.connectionPromise = null;
         });
 
@@ -197,7 +191,6 @@ class IcecastStreamer {
         
         logger.info(`Scheduling Icecast reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
         
-        // Clear any existing reconnect timer
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
         }
@@ -206,7 +199,6 @@ class IcecastStreamer {
             this.isReconnecting = false;
             this.reconnectTimer = null;
             
-            // Clean up existing connection before reconnecting
             this.cleanup();
             
             this.connect().catch(err => {
@@ -234,34 +226,28 @@ class IcecastStreamer {
     write(chunk) {
         if (!chunk || chunk.length === 0) return;
 
-        // If we're connected and have a valid stream, write directly
         if (this.isConnected && this.inputStream && !this.inputStream.destroyed) {
             try {
-                // Flush any buffered data first
                 if (this.buffer.length > 0) {
                     this.flushBuffer();
                 }
                 
                 const success = this.inputStream.write(chunk);
                 if (!success) {
-                    // Handle backpressure
                     this.inputStream.once('drain', () => {
                         logger.debug('Icecast stream drained');
                     });
                 }
             } catch (error) {
                 logger.error('Error writing to Icecast stream:', error);
-                // Buffer the data instead of losing it
                 this.addToBuffer(chunk);
                 if (!this.isReconnecting) {
                     this.handleConnectionError();
                 }
             }
         } else {
-            // Buffer data while not connected
             this.addToBuffer(chunk);
             
-            // Try to reconnect if not already attempting
             if (!this.isConnected && !this.isReconnecting && this.reconnectAttempts === 0) {
                 this.connect().catch(err => {
                     logger.error('Failed to connect to Icecast:', err);
@@ -271,12 +257,10 @@ class IcecastStreamer {
     }
 
     addToBuffer(chunk) {
-        // Add to buffer with size limit
         if (this.bufferSize + chunk.length <= this.maxBufferSize) {
             this.buffer.push(chunk);
             this.bufferSize += chunk.length;
         } else {
-            // Remove oldest chunks to make room
             while (this.bufferSize + chunk.length > this.maxBufferSize && this.buffer.length > 0) {
                 const removed = this.buffer.shift();
                 this.bufferSize -= removed.length;
@@ -309,7 +293,6 @@ class IcecastStreamer {
     }
 
     disconnect() {
-        // Clear reconnect timer
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;

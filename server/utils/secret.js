@@ -20,9 +20,5 @@ export default {
     ICECAST_HOST: process.env.ICECAST_HOST,
     ICECAST_PORT: process.env.ICECAST_PORT,
     ICECAST_PASSWORD: process.env.ICECAST_PASSWORD,
-    ICECAST_MOUNT: process.env.ICECAST_MOUNT || '/radio.mp3',
-    ICECAST_NAME: process.env.ICECAST_NAME || 'MRadio',
-    ICECAST_DESCRIPTION: process.env.ICECAST_DESCRIPTION || 'MRadio - Multi-platform Music Streaming',
-    ICECAST_GENRE: process.env.ICECAST_GENRE || 'Various',
     ICECAST_BITRATE: process.env.ICECAST_BITRATE || '128'
 }

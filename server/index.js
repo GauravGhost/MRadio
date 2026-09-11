@@ -14,27 +14,21 @@ const server = http.createServer(app);
 app.use(express.json());
 
 app.get("/", function (req, res) {
-    res.redirect('/stream');
+    res.redirect('/api/channels');
 });
 
 (async () => {
     // 1. Initialize Initial Data
     await Initializer.init();
 
-    // 2. Initialize Channel Manager & Default/Persisted Channels
+    // 2. Initialize Channel Manager & Persisted Channels
     await channelManager.init();
-
-    const defaultChannel = channelManager.getChannel('default');
 
     // 3. Initialize Icecast streaming across all channels if configured
     const icecastConfig = {
         host: secret.ICECAST_HOST,
         port: secret.ICECAST_PORT,
         password: secret.ICECAST_PASSWORD,
-        mount: secret.ICECAST_MOUNT || '/radio.mp3',
-        name: secret.ICECAST_NAME || 'MRadio',
-        description: secret.ICECAST_DESCRIPTION || 'MRadio Broadcast',
-        genre: secret.ICECAST_GENRE || 'Various',
         bitrate: secret.ICECAST_BITRATE || '128'
     };
 
@@ -46,8 +40,8 @@ app.get("/", function (req, res) {
     }
 
 
-    // 4. Initialize socket.io with default channel
-    socketManager.initialize(server, defaultChannel);
+    // 4. Initialize socket.io
+    socketManager.initialize(server);
 
     // 5. Mount API Routes
     app.use("/api", router);
@@ -57,9 +51,12 @@ app.get("/", function (req, res) {
         res.redirect("/api/health");
     });
 
-    // 6. Direct HTTP Audio Stream Handler (Single-Port Multi-Channel)
-    const handleChannelStream = (req, res, channelId = 'default') => {
+    // 6. Direct HTTP Audio Stream Handler
+    const handleChannelStream = (req, res, channelId) => {
         const targetChannel = channelManager.getChannel(channelId);
+        if (!targetChannel) {
+            return res.status(404).json({ success: false, message: `Channel '${channelId}' not found` });
+        }
         const { id, client } = targetChannel.addClient();
 
         res.set({
@@ -74,10 +71,7 @@ app.get("/", function (req, res) {
         });
     };
 
-    // Default channel stream
-    app.get("/stream", (req, res) => handleChannelStream(req, res, 'default'));
-
-    // Named channel stream (e.g. /stream/lofi, /stream/pop)
+    // Named channel stream
     app.get("/stream/:channelId", (req, res) => handleChannelStream(req, res, req.params.channelId));
 
     // API channel stream alias
@@ -86,8 +80,7 @@ app.get("/", function (req, res) {
 
     server.listen(PORT, () => {
         console.log(`Radio Broadcast Server listening on port ${PORT}`);
-        console.log(`Default Direct Stream: http://localhost:${PORT}/stream`);
-        console.log(`Multi-Channel Endpoint: http://localhost:${PORT}/stream/:channelId`);
+        console.log(`Channel Stream Endpoint: http://localhost:${PORT}/stream/:channelId`);
     });
 })();
 

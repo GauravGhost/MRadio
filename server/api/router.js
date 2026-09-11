@@ -50,7 +50,7 @@ import {
     getHealth,
     updateCookies
 } from './controller.js';
-import { isAdmin, requireAdmin, requireUser } from './middleware.js';
+import { isAdmin, requireAdmin, requireChannel, requireUser } from './middleware.js';
 
 const router = express.Router();
 
@@ -60,14 +60,14 @@ router.get("/health", getHealth);
 // 1. Channel Management Routes (Admin only)
 router.get("/channels", getAllChannels);
 router.post("/channels", requireAdmin, createChannel);
-router.get("/channels/:channelId", getChannelDetails);
+router.get("/channels/:channelId", requireChannel, getChannelDetails);
 router.patch("/channels/:channelId", requireAdmin, updateChannel);
 router.delete("/channels/:channelId", requireAdmin, deleteChannel);
 router.post("/channels/:channelId/restart", requireAdmin, restartChannel);
 
 // 2. Playback Control Routes (Channel Scoped)
-router.get("/channels/:channelId/playback/current", getCurrentSong);
-router.get("/channels/:channelId/playback/upcoming", getUpcomingSong);
+router.get("/channels/:channelId/playback/current", requireChannel, getCurrentSong);
+router.get("/channels/:channelId/playback/upcoming", requireChannel, getUpcomingSong);
 router.post("/channels/:channelId/playback/pause", requireUser, pauseSong);
 router.post("/channels/:channelId/playback/resume", requireUser, resumeSong);
 router.post("/channels/:channelId/playback/skip", requireUser, skipSong);
@@ -75,7 +75,7 @@ router.post("/channels/:channelId/playback/previous", requireUser, previousSong)
 router.post("/channels/:channelId/playback/seek", requireUser, seekSong);
 
 // 3. Queue Management Routes (Channel Scoped)
-router.get("/channels/:channelId/queue", getQueueList);
+router.get("/channels/:channelId/queue", requireChannel, getQueueList);
 router.post("/channels/:channelId/queue/songs", requireUser, addSongToQueue);
 router.delete("/channels/:channelId/queue/songs/:index", requireUser, removeSongFromQueue);
 router.delete("/channels/:channelId/queue/songs/user/:requestedBy", requireUser, removeLastSongRequestedByUser);
@@ -104,6 +104,6 @@ router.post("/admin/token", isAdmin, generateToken);
 router.delete("/admin/tokens/username/:username", isAdmin, removeTokenByUsername);
 router.patch("/admin/tokens/username/:username", isAdmin, updateTokenChannels);
 router.post("/admin/cookies", isAdmin, updateCookies);
-router.get("/system/icecast", getIcecastStatus);
+router.get("/channels/:channelId/icecast", requireChannel, getIcecastStatus);
 
 export default router;

@@ -1,6 +1,6 @@
 # MRadio - Radio Broadcasting System
 
-A powerful radio broadcasting system that streams music from YouTube, JioSaavn, and SoundCloud with real-time queue management and Icecast support.
+A powerful radio streaming platform built for multi-channel broadcasting, dynamic queues, and seamless music streaming.
 
 ## Features
 
@@ -55,10 +55,6 @@ INITIAL_PLAYLIST_TITLE="Top 50 Songs"
 ICECAST_HOST=localhost
 ICECAST_PORT=8000
 ICECAST_PASSWORD=your_icecast_password
-ICECAST_MOUNT=/radio.mp3
-ICECAST_NAME=MRadio
-ICECAST_DESCRIPTION="MRadio - Multi-platform Music Streaming"
-ICECAST_GENRE=Various
 ICECAST_BITRATE=128
 
 # === OPTIONAL: Server Settings ===
@@ -80,7 +76,7 @@ mkdir -p cache data logs media/tracks media/fallback config
 npm start```
 
 The server starts on port **9126**. Access:
-- **Web Stream**: http://localhost:9126/stream
+- **Web Stream**: http://localhost:9126/stream/main
 - **Health Check**: http://localhost:9126/api/health
 
 ---
@@ -137,11 +133,11 @@ you can hand a client a key that controls only its own channel:
 
 **Unknown channels are rejected.** Any channel-scoped request naming a channel that does not exist
 returns `404` (`NOT_FOUND`) — for every caller, including admin tokens and the env admin credentials.
-The server never silently retargets such a request at the `default` channel, so a typo fails loudly
-instead of quietly playing on (or pausing) the wrong channel.
 
-The song queue is **per channel**: requests added through one channel are only ever played by that
-channel. Fallback playlists can likewise be pinned to a channel (`channelId`); a channel with its own
+On a fresh install the server seeds a single ordinary channel with id `main`
+that plays the default playlist. (Icecast mount `/main.mp3`).
+
+Fallback playlists can be added to a channel (`channelId`); a channel with its own
 active playlists uses only those, otherwise it falls back to the global (channel-less) playlist pool.
 
 Env admin credentials (`x-admin-api-key` + `x-admin-token-key`) are the master key: they satisfy every route and are the only credential that can list, mint, or revoke tokens. In the tables below, `Token` means any valid `x-token-key` (role `user` or `admin`) or the env admin credentials.
@@ -156,8 +152,8 @@ curl -X POST http://localhost:9126/api/admin/token \
   -d '{"username": "krBot", "role": "user", "channels": ["korean"]}'
 ```
 
-`role` is optional and defaults to `user`. `channels` is optional and defaults to `["default"]`.
-Allowed roles: `user`, `admin`. Every channel in `channels` must already exist.
+`role` is optional and defaults to `user`. `channels` is required — a token must name the channel(s)
+it may act on. Allowed roles: `user`, `admin`. Every channel in `channels` must already exist.
 
 ### Reassign a Token's Channels (Admin Only)
 
@@ -166,14 +162,14 @@ curl -X PATCH http://localhost:9126/api/admin/tokens/username/krBot \
   -H "Content-Type: application/json" \
   -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
   -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
-  -d '{"channels": ["default", "korean"]}'
+  -d '{"channels": ["main", "korean"]}'
 ```
 
 ### Revoke a Token (Admin Only)
 
 ```bash
-# By username (stable — recommended)
-curl -X DELETE http://localhost:9126/api/admin/tokens/username/DiscordMusicBot \
+# By username
+curl -X DELETE http://localhost:9126/api/admin/tokens/username/grab-bot \
   -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
   -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY"
 
@@ -220,7 +216,7 @@ curl -X DELETE http://localhost:9126/api/admin/tokens/1 \
 ### Example: Add Song to Queue
 
 ```bash
-curl -X POST http://localhost:9126/api/channels/default/queue/songs \
+curl -X POST http://localhost:9126/api/channels/main/queue/songs \
   -H "Content-Type: application/json" \
   -H "x-token-key: YOUR_TOKEN" \
   -d '{"songName": "Shape of You Ed Sheeran", "requestedBy": "user1"}'
@@ -246,12 +242,16 @@ curl -X POST http://localhost:9126/api/channels/default/queue/songs \
 | DELETE | `/api/blocklist` | Clear blocklist | Token |
 | GET | `/api/blocklist/check?songName=X` | Check if blocked | Token |
 
+Blocking a specific song (`{"songName": "..."}`) is global. Blocking the currently playing track
+(`{"target": "current"}`) is channel-scoped and requires `channelId` in the body — there is no
+implicit channel.
+
 ### System Endpoints
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/api/health` | Health check | No |
-| GET | `/api/system/icecast` | Icecast status | No |
+| GET | `/api/channels/:id/icecast` | Icecast status for a channel | No |
 | GET | `/api/config` | Get config | Admin |
 | POST | `/api/config` | Update config | Admin |
 | GET | `/api/admin/tokens` | List all tokens | Admin |
@@ -264,9 +264,8 @@ curl -X POST http://localhost:9126/api/channels/default/queue/songs \
 
 | URL | Description |
 |-----|-------------|
-| `http://localhost:9126/stream` | Direct HTTP stream (default channel) |
-| `http://localhost:9126/stream/:channelId` | Named channel stream |
-| `http://localhost:8000/radio.mp3` | Icecast stream (if configured) |
+| `http://localhost:9126/stream/:channelId` | Channel stream (channel id is required) |
+| `http://localhost:8000/:channelId.mp3` | Icecast mount for a channel (e.g. `/main.mp3`) |
 
 ---
 
@@ -313,10 +312,6 @@ socket.on('queueUpdate', (queueData) => {
 | `ICECAST_HOST` | No | - | Icecast server host |
 | `ICECAST_PORT` | No | - | Icecast server port |
 | `ICECAST_PASSWORD` | No | - | Icecast source password |
-| `ICECAST_MOUNT` | No | `/radio.mp3` | Icecast mount point |
-| `ICECAST_NAME` | No | `MRadio` | Stream name |
-| `ICECAST_DESCRIPTION` | No | `MRadio - Multi-platform Music Streaming` | Stream description |
-| `ICECAST_GENRE` | No | `Various` | Stream genre |
 | `ICECAST_BITRATE` | No | `128` | Stream bitrate (kbps) |
 
 ---
@@ -341,8 +336,10 @@ Then configure in `.env`:
 ICECAST_HOST=localhost
 ICECAST_PORT=8000
 ICECAST_PASSWORD=source123
-ICECAST_MOUNT=/radio.mp3
 ```
+
+Each channel publishes to its own mount — `/{channelId}.mp3` (e.g. `/main.mp3`), with the stream name,
+description and genre taken from the channel.
 
 ### Local Installation
 

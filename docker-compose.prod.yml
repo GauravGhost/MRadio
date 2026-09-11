@@ -24,10 +24,6 @@ services:
       - ICECAST_HOST=${ICECAST_HOST:-}
       - ICECAST_PORT=${ICECAST_PORT:-}
       - ICECAST_PASSWORD=${ICECAST_PASSWORD:-}
-      - ICECAST_MOUNT=${ICECAST_MOUNT:-/radio.mp3}
-      - ICECAST_NAME=${ICECAST_NAME:-MRadio}
-      - ICECAST_DESCRIPTION=${ICECAST_DESCRIPTION:-MRadio - Multi-platform Music Streaming}
-      - ICECAST_GENRE=${ICECAST_GENRE:-Various}
       - ICECAST_BITRATE=${ICECAST_BITRATE:-128}
     volumes:
       - /data/mradio/data:/usr/src/app/data

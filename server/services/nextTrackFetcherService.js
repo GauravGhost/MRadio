@@ -60,7 +60,7 @@ const checkAndRefreshMetadata = async (playlist) => {
     }
 }
 
-const emptySongQueueHandler = async (channelId = 'default') => {
+const emptySongQueueHandler = async (channelId) => {
     try {
         const defaultPlaylistMetadata = new DefaultPlaylistMetadataManager();
         const defaultPlaylistStore = new DefaultPlaylistManager();
@@ -168,7 +168,7 @@ const fetchByUrlType = async (songData) => {
  * @description Next song Fetch Logic
  * @returns 
  */
-export const fetchNextTrack = async (channelId = 'default', genre = 'all') => {
+export const fetchNextTrack = async (channelId, genre = 'all') => {
     const songQueue = new SongQueueManager(channelId);
     let retryCount = 0;
     const MAX_RETRIES = 3;

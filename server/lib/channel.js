@@ -24,17 +24,15 @@ import { decideResume, durationToSeconds } from "../utils/resumeDecision.js";
 
 ffmpeg.setFfmpegPath(getFfmpegPath());
 
-// Session writes are debounced: transitions can fire in quick succession and
-// the write always reads live state, so collapsing them is safe.
+// Transitions fire in quick succession and always write live state, so debounce them.
 const STATE_WRITE_DEBOUNCE_MS = 500;
 
-// Playback position is derived from startTime, so the only reason to rewrite
-// state periodically is to keep savedAt fresh (that is what bounds the
-// downtime estimate). One tiny write a minute is negligible.
+// Periodic rewrite keeps savedAt fresh, which bounds the downtime estimate.
 const STATE_HEARTBEAT_MS = 60000;
 
 export class Channel {
-    constructor(id = "default", name = "Default Radio Channel", genre = "all") {
+    constructor(id, name = "Radio Channel", genre = "all") {
+        if (!id) throw new Error("A channel id is required");
         this.id = id;
         this.name = name;
         this.genre = genre;
@@ -929,7 +927,7 @@ export class Channel {
             useIcecast: this.useIcecast,
             icecast: icecast.enabled ? {
                 connected: !!icecast.connected,
-                mount: icecast.config?.mount || (this.id === 'default' ? '/radio.mp3' : `/${this.id}.mp3`),
+                mount: icecast.config?.mount || `/${this.id}.mp3`,
                 streamUrl: icecast.config?.host ? `http://${icecast.config.host}:${icecast.config.port}${icecast.config.mount}` : null,
                 name: icecast.config?.name || `${this.name} Radio`,
             } : null,

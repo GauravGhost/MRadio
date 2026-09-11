@@ -1,11 +1,10 @@
 import { getQueueListJson, saveQueueListJson, durationFormatter } from "../utils.js";
 import BaseQueueManager from "./baseQueueManager.js";
 import logger from "../logger.js";
-import { DEFAULT_CHANNEL_ID } from "../constant.js";
 
 
 class SongQueueManager extends BaseQueueManager {
-    constructor(channelId = DEFAULT_CHANNEL_ID) {
+    constructor(channelId) {
         super({
             readFunction: () => {
                 const queue = getQueueListJson();
@@ -25,11 +24,9 @@ class SongQueueManager extends BaseQueueManager {
         });
 
         this.channelId = channelId;
-        // Scope the inherited in-memory view to this channel only.
         this.items = this.items.filter(item => item.channelId === this.channelId);
     }
 
-    // Merge this channel's items back into the shared file, preserving all other channels' entries.
     saveItems() {
         try {
             const others = getQueueListJson().filter(item => item.channelId !== this.channelId);
@@ -40,7 +37,6 @@ class SongQueueManager extends BaseQueueManager {
         }
     }
 
-    // Alias methods to match existing API
     addToQueue(item) {
         return this.add(item);
     }

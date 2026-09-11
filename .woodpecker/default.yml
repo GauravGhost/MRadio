@@ -14,7 +14,7 @@ steps:
       - "echo Commit: ${CI_COMMIT_SHA}"
       - "echo Author: ${CI_COMMIT_AUTHOR}"
 
-  # Step 2: Transfer workspace files to Oracle server
+  # Step 2: Transfer files
   - name: transfer-files
     image: appleboy/drone-scp
     settings:
@@ -36,7 +36,7 @@ steps:
         - server
       rm: true
 
-  # Step 3: Deploy via Docker Compose
+  # Step 3: Deploy
   - name: deploy
     image: appleboy/drone-ssh
     environment:
@@ -68,14 +68,6 @@ steps:
         from_secret: ICECAST_PORT
       ICECAST_PASSWORD:
         from_secret: ICECAST_PASSWORD
-      ICECAST_MOUNT:
-        from_secret: ICECAST_MOUNT
-      ICECAST_NAME:
-        from_secret: ICECAST_NAME
-      ICECAST_DESCRIPTION:
-        from_secret: ICECAST_DESCRIPTION
-      ICECAST_GENRE:
-        from_secret: ICECAST_GENRE
       ICECAST_BITRATE:
         from_secret: ICECAST_BITRATE
     settings:
@@ -104,10 +96,6 @@ steps:
         - ICECAST_HOST
         - ICECAST_PORT
         - ICECAST_PASSWORD
-        - ICECAST_MOUNT
-        - ICECAST_NAME
-        - ICECAST_DESCRIPTION
-        - ICECAST_GENRE
         - ICECAST_BITRATE
       script:
         - "echo Connected to Oracle Cloud server"

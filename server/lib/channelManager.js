@@ -3,7 +3,7 @@ import { Channel } from './channel.js';
 import fsHelper from '../utils/helper/fs-helper.js';
 import logger from '../utils/logger.js';
 import TokenManager from '../utils/queue/tokenManager.js';
-import { DEFAULT_TRACKS_LOCATION } from '../utils/constant.js';
+import { DEFAULT_TRACKS_LOCATION, MAIN_CHANNEL_ID } from '../utils/constant.js';
 
 const DATA_FILE = path.join(process.cwd(), 'data', 'channels.json');
 
@@ -49,9 +49,7 @@ class ChannelManager {
             return;
         }
 
-        const mount = channel.id === 'default'
-            ? (this.icecastConfig.mount || '/radio.mp3')
-            : `/${channel.id}.mp3`;
+        const mount = `/${channel.id}.mp3`;
 
         const channelConfig = {
             ...this.icecastConfig,
@@ -70,13 +68,20 @@ class ChannelManager {
     async init() {
         if (this.initialized) return;
 
-        const defaultChannel = new Channel('default', 'Default Radio', 'all');
-        this.channels.set('default', defaultChannel);
-
-        this.attachIcecastToChannel(defaultChannel);
         this.loadChannelsFromDisk();
 
-        await this.startChannel(defaultChannel);
+        // Seeding main channel if channel not exist
+        if (this.channels.size === 0) {
+            const channel = new Channel(MAIN_CHANNEL_ID, 'Main', 'all');
+            this.channels.set(MAIN_CHANNEL_ID, channel);
+            this.saveChannelsToDisk();
+            logger.info(`[ChannelManager] No channels found. Seeded initial channel "${MAIN_CHANNEL_ID}"`);
+        }
+
+        for (const channel of this.channels.values()) {
+            this.attachIcecastToChannel(channel);
+            this.startChannel(channel);
+        }
 
         this.initialized = true;
     }
@@ -116,6 +121,7 @@ class ChannelManager {
                 isIdle: channel.isIdle,
                 listeners: channel.clients.size,
                 streamAlive,
+                icecastConnected: !!channel.getIcecastStatus().connected,
             });
             if (!streamAlive) {
                 unhealthy.push(channel.id);
@@ -131,12 +137,9 @@ class ChannelManager {
                 const data = fsHelper.readFromJson(DATA_FILE, []);
                 if (Array.isArray(data)) {
                     for (const item of data) {
-                        if (item.id && item.id !== 'default' && !this.channels.has(item.id)) {
+                        if (item.id && !this.channels.has(item.id)) {
                             const channel = new Channel(item.id, item.name || item.id, item.genre || 'all');
                             this.channels.set(item.id, channel);
-                            this.attachIcecastToChannel(channel);
-                            // Lazy load track queue for custom channels
-                            this.startChannel(channel);
                         }
                     }
                 }
@@ -150,13 +153,11 @@ class ChannelManager {
         try {
             const list = [];
             for (const [id, ch] of this.channels.entries()) {
-                if (id !== 'default') {
-                    list.push({
-                        id: ch.id,
-                        name: ch.name,
-                        genre: ch.genre
-                    });
-                }
+                list.push({
+                    id: ch.id,
+                    name: ch.name,
+                    genre: ch.genre
+                });
             }
             fsHelper.writeToJson(DATA_FILE, list);
         } catch (error) {
@@ -165,13 +166,8 @@ class ChannelManager {
     }
 
 
-    getChannel(id = 'default') {
-        const channel = this.channels.get(id);
-        if (!channel) {
-            // Fall back to default if channel not found
-            return this.channels.get('default');
-        }
-        return channel;
+    getChannel(id) {
+        return this.channels.get(id) || null;
     }
 
     async createChannel({ id, name, genre }) {
@@ -195,7 +191,6 @@ class ChannelManager {
     }
 
     async deleteChannel(id) {
-        if (id === 'default') throw new Error('Cannot delete default channel');
         const channel = this.channels.get(id);
         if (!channel) throw new Error(`Channel '${id}' not found`);
 
