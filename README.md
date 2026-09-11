@@ -1,136 +1,277 @@
-# MRadio 🎵
+# MRadio - Radio Broadcasting System
 
-A powerful and flexible radio broadcasting system that supports multiple music streaming platforms with real-time streaming capabilities. Stream music from various sources and manage queues dynamically with live audio broadcasting.
+A powerful radio broadcasting system that streams music from YouTube, JioSaavn, and SoundCloud with real-time queue management and Icecast support.
 
-## Features 🚀
+## Features
 
-### Core Features
-- **Multi-platform Music Streaming Support:**
-  - 🎵 **JioSaavn** - Indian music streaming
-  - 🎬 **YouTube** - Video/audio content
-  - 🎧 **SoundCloud** - Independent artists and tracks
-  - 🎶 **Spotify** - Metadata and search integration
+- **Multi-Platform Music**: Stream from YouTube, JioSaavn, and SoundCloud
+- **Live Broadcasting**: Icecast server integration + direct HTTP MP3 streaming
+- **Queue Management**: Dynamic song queuing with priority support
+- **Real-Time Updates**: WebSocket integration for live client notifications
+- **Smart Caching**: Automatic file caching with LRU eviction (1GB limit)
+- **Multi-Channel**: Support for multiple radio channels
+- **Admin Controls**: Token-based authentication and admin panel
+- **Docker Ready**: Easy containerized deployment
 
-### Advanced Capabilities
-- **Dual Streaming Support** - Icecast server integration + direct HTTP MP3 streaming
-- **Professional Broadcasting** - Icecast-compatible streaming with metadata support
-- **Smart Queue Management** - Dynamic song queuing with priority control
-- **WebSocket Integration** - Live updates for connected clients
-- **Intelligent Caching System** - Automatic file caching with size management
-- **Block List Management** - Content filtering and moderation
-- **Default Playlist System** - Automated fallback music rotation
-- **Metadata Enrichment** - Spotify-powered song information
-- **Token-based Authentication** - Secure access control
-- **Admin Panel Controls** - Administrative song and user management
-- **Docker Containerization** - Easy deployment and scaling
-- **Smart Fallback System** - Automatic track switching when queue is empty
-- **Configurable Settings** - Runtime configuration management
+## Quick Start
 
-## Prerequisites 📋
+### Prerequisites
 
-- **Node.js** (v18 or higher)
-- **FFmpeg** (for audio processing and streaming)
-- **Docker** (optional, for containerized deployment)
-- **Icecast Server** (optional, for professional broadcasting)
-- **API Keys** for music platforms:
-  - Spotify Client ID & Secret (for metadata)
-  - SoundCloud API Key (for SoundCloud integration)
+- [Node.js](https://nodejs.org/) v18+
+- [FFmpeg](https://ffmpeg.org/) (audio processing)
+- [Docker](https://www.docker.com/) (optional)
 
-## Installation 🛠️
+### 1. Clone & Install
 
-### Method 1: Local Development
-
-1. **Clone the repository:**
 ```bash
 git clone https://github.com/GauravGhost/MRadio
 cd MRadio
-```
-
-2. **Install dependencies:**
-```bash
 npm install
 ```
 
-3. **Configure environment variables:**
-Create a `.env` file in the root directory with the following variables:
-```env
-# Server Configuration
-PORT=9126
-NODE_ENV=development
-FFMPEG_ENV=production
+### 2. Configure Environment
 
-# Music Platform API Keys
+Create a `.env` file in the root directory:
+
+```env
+# === REQUIRED ===
+X_ADMIN_API_KEY=your_admin_api_key_here
+X_ADMIN_TOKEN_KEY=your_admin_token_key_here
+
+# === OPTIONAL: Music Platform APIs ===
+# Get Spotify keys: https://developer.spotify.com/dashboard
 SPOTIFY_CLIEND_ID=your_spotify_client_id
 SPOTIFY_CLIEND_SECRET_ID=your_spotify_client_secret
+
+# Get SoundCloud key: https://soundcloud.com/you/apps
 SOUNDCLOUD_API_KEY=your_soundcloud_api_key
 
-# Admin Authentication
-X_ADMIN_API_KEY=your_admin_api_key
-X_ADMIN_TOKEN_KEY=your_admin_token_key
+# === OPTIONAL: Default Playlist ===
+INITIAL_PLAYLIST_ID=1134543272
+INITIAL_PLAYLIST_SOURCE=jiosaavn
+INITIAL_PLAYLIST_TITLE="Top 50 Songs"
 
-# Icecast Server Configuration (Optional)
+# === OPTIONAL: Icecast Streaming ===
 ICECAST_HOST=localhost
 ICECAST_PORT=8000
 ICECAST_PASSWORD=your_icecast_password
 ICECAST_MOUNT=/radio.mp3
 ICECAST_NAME=MRadio
-ICECAST_DESCRIPTION=MRadio - Multi-platform Music Streaming
+ICECAST_DESCRIPTION="MRadio - Multi-platform Music Streaming"
 ICECAST_GENRE=Various
 ICECAST_BITRATE=128
 
-# Initial Default Playlist (Optional)
-INITIAL_PLAYLIST_ID=playlist_id
-INITIAL_PLAYLIST_SOURCE=youtube|jiosaavn|soundcloud
-INITIAL_PLAYLIST_TITLE=playlist_title
+# === OPTIONAL: Server Settings ===
+PORT=9126
+NODE_ENV=development
+LOG_LEVEL=info
+TZ=Asia/Kolkata
 ```
 
-4. **Create required directories:**
+### 3. Create Required Directories
+
 ```bash
 mkdir -p cache data logs media/tracks media/fallback config
 ```
 
-5. **Start the server:**
+### 4. Start the Server
+
 ```bash
-npm start
+npm start```
+
+The server starts on port **9126**. Access:
+- **Web Stream**: http://localhost:9126/stream
+- **Health Check**: http://localhost:9126/api/health
+
+---
+
+## Docker Deployment
+
+### Using Docker Compose
+
+1. Create `.env` file with required variables (see above)
+
+2. Build and run:
+```bash
+docker compose up -d
 ```
 
-### Method 2: Docker Deployment
+### Using run.sh Script
 
-1. **Clone the repository:**
 ```bash
-git clone https://github.com/GauravGhost/MRadio
-cd MRadio
-```
-
-2. **Configure environment variables:**
-Create a `.env` file with the required variables (same as above).
-
-3. **Build and run with Docker:**
-```bash
-# Using the provided script
 ./run.sh
-
-# Or manually
-docker compose up -d
 ```
 
-### Method 3: Quick Docker Setup
+### Production Deployment
+
 ```bash
-# Stop any existing containers and rebuild
-docker compose down --rmi all
-docker compose build
-docker compose up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-## Icecast Integration 📡
+---
 
-MRadio supports professional broadcasting through Icecast server integration, providing a standards-compliant streaming solution with proper metadata support.
+## API Reference
 
-### Setting Up Icecast Server
+### Authentication
 
-#### Option 1: Using Docker (Recommended)
+| Header | Description |
+|--------|-------------|
+| `x-token-key` | User token for authenticated endpoints |
+| `x-admin-api-key` | Admin API key for admin endpoints |
+| `x-admin-token-key` | Admin token key for admin endpoints |
 
-1. **Create Icecast Docker container:**
+### Generate User Token (Admin Only)
+
+```bash
+curl -X POST http://localhost:9126/api/admin/token \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
+  -d '{"username": "username"}'
+```
+
+### Channel Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/channels` | List all channels | No |
+| POST | `/api/channels` | Create new channel | Token |
+| GET | `/api/channels/:id` | Get channel details | No |
+| PATCH | `/api/channels/:id` | Update channel | Token |
+| DELETE | `/api/channels/:id` | Delete channel | Token |
+| POST | `/api/channels/:id/restart` | Restart channel | Token |
+
+### Playback Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/channels/:id/playback/current` | Current song | No |
+| GET | `/api/channels/:id/playback/upcoming` | Next song | No |
+| POST | `/api/channels/:id/playback/skip` | Skip song | Token |
+| POST | `/api/channels/:id/playback/previous` | Previous song | Token |
+| POST | `/api/channels/:id/playback/pause` | Pause playback | Token |
+| POST | `/api/channels/:id/playback/resume` | Resume playback | Token |
+| POST | `/api/channels/:id/playback/seek` | Seek position | Token |
+
+### Queue Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/channels/:id/queue` | Get queue | No |
+| POST | `/api/channels/:id/queue/songs` | Add song | Token |
+| DELETE | `/api/channels/:id/queue/songs/:index` | Remove song | Token |
+| DELETE | `/api/channels/:id/queue/songs/user/:name` | Remove user's last request | Token |
+| POST | `/api/channels/:id/queue/playlists` | Add playlist | Token |
+| DELETE | `/api/channels/:id/queue` | Clear queue | Token |
+
+### Example: Add Song to Queue
+
+```bash
+curl -X POST http://localhost:9126/api/channels/default/queue/songs \
+  -H "Content-Type: application/json" \
+  -H "x-token-key: YOUR_TOKEN" \
+  -d '{"songName": "Shape of You Ed Sheeran", "requestedBy": "user1"}'
+```
+
+### Playlist Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/playlists/default` | List default playlists | Token |
+| POST | `/api/playlists/default` | Add default playlist | Token |
+| DELETE | `/api/playlists/default/:index` | Remove playlist | Token |
+| PATCH | `/api/playlists/default/:index/status` | Toggle playlist | Token |
+
+### Blocklist Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/blocklist` | Get blocked songs | Token |
+| POST | `/api/blocklist` | Block a song | Token |
+| DELETE | `/api/blocklist/name/:name` | Unblock by name | Token |
+| DELETE | `/api/blocklist/index/:index` | Unblock by index | Token |
+| DELETE | `/api/blocklist` | Clear blocklist | Token |
+| GET | `/api/blocklist/check?name=X` | Check if blocked | Token |
+
+### System Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/health` | Health check | No |
+| GET | `/api/system/icecast` | Icecast status | No |
+| GET | `/api/config` | Get config | Token |
+| POST | `/api/config` | Update config | Token |
+| GET | `/api/admin/tokens` | List all tokens | Admin |
+| DELETE | `/api/admin/tokens/:index` | Remove token | Admin |
+| POST | `/api/admin/cookies` | Update cookies | Admin |
+
+### Stream URLs
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:9126/stream` | Direct HTTP stream (default channel) |
+| `http://localhost:9126/stream/:channelId` | Named channel stream |
+| `http://localhost:8000/radio.mp3` | Icecast stream (if configured) |
+
+---
+
+## WebSocket Events
+
+Connect via Socket.IO to receive real-time updates:
+
+```javascript
+const socket = io('http://localhost:9126');
+
+socket.on('newSong', (songData) => {
+  console.log('Now playing:', songData.title);
+});
+
+socket.on('playbackProgress', (progress) => {
+  console.log('Progress:', progress.percentage + '%');
+});
+
+socket.on('queueUpdate', (queueData) => {
+  console.log('Queue updated');
+});
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `9126` | Server port |
+| `NODE_ENV` | No | `development` | Environment mode |
+| `LOG_LEVEL` | No | `info` | Logging level |
+| `TZ` | No | `Asia/Kolkata` | Timezone |
+| `QUEUE_BUFFER_SIZE` | No | `2` | Queue buffer size |
+| `RESUME_MAX_GAP_SECONDS` | No | `180` | Max gap for session resume |
+| `X_ADMIN_API_KEY` | **Yes** | - | Admin API key |
+| `X_ADMIN_TOKEN_KEY` | **Yes** | - | Admin token key |
+| `SPOTIFY_CLIEND_ID` | No | - | Spotify Client ID |
+| `SPOTIFY_CLIEND_SECRET_ID` | No | - | Spotify Client Secret |
+| `SOUNDCLOUD_API_KEY` | No | - | SoundCloud API Key |
+| `INITIAL_PLAYLIST_ID` | No | - | Default playlist ID |
+| `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud) |
+| `INITIAL_PLAYLIST_TITLE` | No | - | Default playlist title |
+| `ICECAST_HOST` | No | - | Icecast server host |
+| `ICECAST_PORT` | No | - | Icecast server port |
+| `ICECAST_PASSWORD` | No | - | Icecast source password |
+| `ICECAST_MOUNT` | No | `/radio.mp3` | Icecast mount point |
+| `ICECAST_NAME` | No | `MRadio` | Stream name |
+| `ICECAST_DESCRIPTION` | No | `MRadio - Multi-platform Music Streaming` | Stream description |
+| `ICECAST_GENRE` | No | `Various` | Stream genre |
+| `ICECAST_BITRATE` | No | `128` | Stream bitrate (kbps) |
+
+---
+
+## Icecast Setup (Optional)
+
+For professional broadcasting, set up an Icecast server:
+
+### Docker (Recommended)
+
 ```bash
 docker run -d --name icecast \
   -p 8000:8000 \
@@ -140,23 +281,18 @@ docker run -d --name icecast \
   moul/icecast
 ```
 
-2. **Configure MRadio environment variables:**
+Then configure in `.env`:
 ```env
 ICECAST_HOST=localhost
 ICECAST_PORT=8000
 ICECAST_PASSWORD=source123
 ICECAST_MOUNT=/radio.mp3
-ICECAST_NAME=MRadio
-ICECAST_DESCRIPTION=MRadio - Multi-platform Music Streaming
-ICECAST_GENRE=Various
-ICECAST_BITRATE=128
 ```
 
-#### Option 2: Local Icecast Installation
+### Local Installation
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt-get update
 sudo apt-get install icecast2
 ```
 
@@ -165,724 +301,57 @@ sudo apt-get install icecast2
 brew install icecast
 ```
 
-**Configuration:**
-Edit `/etc/icecast2/icecast.xml` (Linux) or `/usr/local/etc/icecast.xml` (macOS):
+Edit `/etc/icecast2/icecast.xml`:
 ```xml
 <icecast>
-    <listen-socket>
-        <port>8000</port>
-    </listen-socket>
-    
-    <authentication>
-        <source-password>your_source_password</source-password>
-        <admin-password>your_admin_password</admin-password>
-    </authentication>
-    
-    <mount>
-        <mount-name>/radio.mp3</mount-name>
-        <username>source</username>
-        <password>your_source_password</password>
-        <max-listeners>100</max-listeners>
-        <dump-file>/var/log/icecast2/radio.dump</dump-file>
-        <burst-on-connect>1</burst-on-connect>
-        <mp3-metadata-interval>8192</mp3-metadata-interval>
-    </mount>
+  <listen-socket>
+    <port>8000</port>
+  </listen-socket>
+  <authentication>
+    <source-password>your_source_password</source-password>
+    <admin-password>your_admin_password</admin-password>
+  </authentication>
 </icecast>
 ```
 
-**Start Icecast:**
-```bash
-# Linux
-sudo systemctl start icecast2
-sudo systemctl enable icecast2
+---
 
-# macOS
-brew services start icecast
-```
-
-### Icecast Features
-
-- **Professional Broadcasting**: Standards-compliant streaming protocol
-- **Metadata Support**: Song titles, artists, and album information
-- **Multiple Listeners**: Support for concurrent connections
-- **Auto-Reconnection**: Automatic reconnection on network issues
-- **Fallback Support**: Graceful fallback to direct HTTP streaming
-- **Status Monitoring**: Real-time connection and streaming status
-
-### Streaming URLs
-
-Once configured, your streams will be available at:
-
-- **Icecast Stream**: `http://your-server:8000/radio.mp3`
-- **Direct HTTP Stream**: `http://your-server:9126/stream`
-- **Icecast Admin Panel**: `http://your-server:8000/admin/`
-
-### Troubleshooting Icecast
-
-#### Common Issues
-
-1. **Connection Refused**
-   - Verify Icecast server is running: `netstat -tlnp | grep :8000`
-   - Check firewall settings
-   - Verify ICECAST_HOST and ICECAST_PORT configuration
-
-2. **Authentication Failed**
-   - Verify ICECAST_PASSWORD matches source password in icecast.xml
-   - Check mount point configuration
-
-3. **No Audio Stream**
-   - Check FFmpeg installation and permissions
-   - Verify mount point exists in Icecast configuration
-   - Check logs: `docker logs icecast` or `/var/log/icecast2/`
-
-#### Status Monitoring
-
-Check Icecast status via API:
-```bash
-curl -X GET http://localhost:9126/api/icecast/status
-```
-
-Response includes:
-- Connection status
-- Stream information
-- Listener count
-- Bitrate and quality metrics
-
-## Usage 🎮
-
-### Starting the Radio Server
-
-#### Local Development
-```bash
-npm start
-```
-The server will start on port `9126` by default.
-
-#### Docker
-```bash
-docker compose up -d
-```
-
-### Accessing the Radio Stream
-
-#### Icecast Stream (Professional Broadcasting)
-```
-http://your-icecast-server:8000/radio.mp3
-```
-High-quality streaming with proper metadata support for media players and broadcasting tools.
-
-#### HTTP Audio Stream (Direct Access)
-```
-http://localhost:9126/stream
-```
-Direct access to the MP3 audio stream for simple media player integration.
-
-#### Web Interface
-```
-http://localhost:9126/
-```
-Redirects to the stream endpoint for immediate playback.
-
-### Authentication Setup
-
-1. **Generate User Token** (Admin required):
-```bash
-curl -X POST http://localhost:9126/api/admin/token \
-  -H "Content-Type: application/json" \
-  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
-  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
-  -d '{"username": "your_username"}'
-```
-
-2. **Use Token for API Requests:**
-```bash
-# Add token to headers for authenticated endpoints
--H "x-token-key: YOUR_GENERATED_TOKEN"
-```
-
-### Basic Usage Examples
-
-#### Add a Song to Queue
-```bash
-curl -X POST http://localhost:9126/api/songs/add \
-  -H "Content-Type: application/json" \
-  -d '{"songName": "Shape of You Ed Sheeran", "requestedBy": "user1"}'
-```
-
-#### Skip Current Song
-```bash
-curl -X GET http://localhost:9126/api/songs/skip \
-  -H "x-token-key: YOUR_TOKEN"
-```
-
-#### Get Current Playing Song
-```bash
-curl -X GET http://localhost:9126/api/songs/current
-```
-
-#### View Queue
-```bash
-curl -X GET http://localhost:9126/api/songs/queue
-```
-
-#### Get Icecast Status
-```bash
-curl -X GET http://localhost:9126/api/icecast/status
-```
-
-Start the server in development mode:
-```bash
-npm start
-```
-
-For production:
-```bash
-npm start
-```
-
-### Using Docker
-
-Build and run using Docker Compose:
-```bash
-docker-compose up --build
-```
-
-## API Documentation 📚
-
-### Authentication
-All protected endpoints require a user token in the request headers:
-```
-x-token-key: YOUR_GENERATED_TOKEN
-```
-
-Admin endpoints require additional authentication:
-```
-x-admin-api-key: YOUR_ADMIN_API_KEY
-x-admin-token-key: YOUR_ADMIN_TOKEN_KEY
-```
-
-### Public Endpoints (No Authentication Required)
-
-#### Current Playback Information
-```http
-GET /api/songs/current
-Description: Get the currently playing song information
-
-GET /api/songs/upcoming  
-Description: Get information about the next song in queue
-
-GET /api/songs/queue
-Description: Get the complete list of songs in the queue
-
-GET /api/icecast/status
-Description: Get Icecast server status and streaming information
-```
-
-#### Add Songs (Public)
-```http
-POST /api/songs/add
-Content-Type: application/json
-{
-  "songName": "Artist - Song Title",
-  "requestedBy": "username",
-  "force": false,
-  "preference": "youtube|jiosaavn|soundcloud"
-}
-Description: Add a song to the queue
-```
-
-### Authenticated User Endpoints
-
-#### Queue Management
-```http
-GET /api/songs/skip
-Description: Skip the current song
-
-GET /api/songs/previous
-Description: Play the previous song
-
-GET /api/songs/seek/:seconds
-Description: Seek to a specific time in the current song
-
-POST /api/songs/add/top
-Content-Type: application/json
-{
-  "songName": "Artist - Song Title", 
-  "requestedBy": "username"
-}
-Description: Add a song to the top of the queue (priority)
-
-DELETE /api/songs/remove/:index
-Description: Remove a song from the queue at specified index
-
-DELETE /api/songs/requests/last/:requestedBy
-Description: Remove the last song requested by a specific user
-```
-
-#### Playlist Management
-```http
-POST /api/playlist/add
-Content-Type: application/json
-{
-  "source": "youtube|jiosaavn",
-  "playlistId": "playlist_id",
-  "requestedBy": "username"
-}
-Description: Add an entire playlist to the queue
-
-POST /api/playlist/add/top
-Description: Add an entire playlist to the top of the queue
-
-POST /api/playlist/default
-Content-Type: application/json
-{
-  "playlistId": "playlist_id",
-  "title": "Playlist Name",
-  "source": "youtube|jiosaavn|soundcloud",
-  "isActive": true,
-  "genre": "mix|pop|rock|etc"
-}
-Description: Add a playlist to the default rotation
-
-GET /api/playlist/default
-Description: Get all default playlists
-
-DELETE /api/playlist/default/:index
-Description: Remove a default playlist by index
-
-PUT /api/playlist/default/:index/status
-Content-Type: application/json
-{
-  "isActive": true
-}
-Description: Update playlist active status
-```
-
-#### Block List Management
-```http
-POST /api/songs/block/current
-Content-Type: application/json
-{
-  "requestedBy": "username"
-}
-Description: Block the currently playing song
-
-POST /api/songs/block
-Content-Type: application/json
-{
-  "songName": "Song Title",
-  "requestedBy": "username"
-}
-Description: Block a song by its name
-
-DELETE /api/songs/block/:songName
-Description: Unblock a song by its name
-
-DELETE /api/songs/block/:index
-Description: Unblock a song by its index in the block list
-
-DELETE /api/songs/block/all
-Description: Clear the entire block list
-
-GET /api/songs/block/list
-Description: Get all blocked songs
-
-GET /api/songs/block/check?songName=Song%20Title
-Description: Check if a specific song is blocked
-```
-
-#### Configuration Management
-```http
-GET /api/config?key=configKey
-Description: Get configuration value by key
-
-POST /api/config
-Content-Type: application/json
-{
-  "key": "defaultPlaylistGenre",
-  "value": "pop"
-}
-Description: Update configuration values
-```
-
-#### Streaming Information
-```http
-GET /api/icecast/status
-Description: Get Icecast server status and streaming information
-Response: {
-  "enabled": true,
-  "connected": true,
-  "host": "localhost",
-  "port": 8000,
-  "mount": "/radio.mp3",
-  "listeners": 5,
-  "status": "streaming"
-}
-```
-
-### Admin Endpoints
-
-#### Token Management
-```http
-POST /api/admin/token
-Content-Type: application/json
-Headers: x-admin-api-key, x-admin-token-key
-{
-  "username": "new_username"
-}
-Description: Generate a new user authentication token
-```
-
-### WebSocket Events
-
-The server provides real-time updates via Socket.IO:
-
-#### Client Events (Listening)
-```javascript
-socket.on('newSong', (songData) => {
-  // New song started playing
-  // songData: { title, duration, requestedBy }
-});
-
-socket.on('playbackProgress', (progress) => {
-  // Playback progress update (every 30 seconds)
-  // progress: { currentTime, duration, percentage }
-});
-
-socket.on('queueUpdate', (queueData) => {
-  // Queue has been modified
-});
-```
-
-#### Server Events (Sending)
-```javascript
-socket.emit('ping'); // Heartbeat check
-socket.emit('pong'); // Heartbeat response
-```
-
-## Configuration ⚙️
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PORT` | Server port | `9126` | No |
-| `NODE_ENV` | Environment mode | `development` | No |
-| `FFMPEG_ENV` | FFmpeg environment | `development` | No |
-| `SPOTIFY_CLIEND_ID` | Spotify Client ID | - | Yes* |
-| `SPOTIFY_CLIEND_SECRET_ID` | Spotify Client Secret | - | Yes* |
-| `SOUNDCLOUD_API_KEY` | SoundCloud API Key | - | Yes* |
-| `X_ADMIN_API_KEY` | Admin API Key | - | Yes |
-| `X_ADMIN_TOKEN_KEY` | Admin Token Key | - | Yes |
-| `ICECAST_HOST` | Icecast server host | - | No** |
-| `ICECAST_PORT` | Icecast server port | - | No** |
-| `ICECAST_PASSWORD` | Icecast source password | - | No** |
-| `ICECAST_MOUNT` | Icecast mount point | `/radio.mp3` | No |
-| `ICECAST_NAME` | Icecast stream name | `MRadio` | No |
-| `ICECAST_DESCRIPTION` | Icecast stream description | `MRadio - Multi-platform Music Streaming` | No |
-| `ICECAST_GENRE` | Icecast stream genre | `Various` | No |
-| `ICECAST_BITRATE` | Icecast stream bitrate | `128` | No |
-| `INITIAL_PLAYLIST_ID` | Default playlist ID | - | No |
-| `INITIAL_PLAYLIST_SOURCE` | Default playlist source | - | No |
-| `INITIAL_PLAYLIST_TITLE` | Default playlist title | - | No |
-
-*Required for full functionality, but the server can run with limited features without them.
-**Required for Icecast streaming. If not provided, the system will fall back to direct HTTP streaming only.
-
-### Directory Structure
+## Project Structure
 
 ```
 MRadio/
-├── server/                 # Core server code
-│   ├── api/               # REST API routes and controllers
-│   ├── lib/               # Platform integrations (YouTube, JioSaavn, etc.)
-│   ├── services/          # Business logic services
-│   └── utils/             # Utility functions and helpers
-├── cache/                 # Cached audio files
-├── data/                  # Runtime data (queues, configs, etc.)
-├── logs/                  # Application logs
+├── server/
+│   ├── api/           # REST API routes & controllers
+│   ├── lib/           # Platform integrations (YouTube, JioSaavn, etc.)
+│   ├── services/      # Business logic
+│   └── utils/         # Utilities & constants
+├── cache/             # Cached audio files
+├── data/              # Runtime data (queues, configs)
+├── logs/              # Application logs
 ├── media/
-│   ├── tracks/           # Temporary downloaded tracks
-│   └── fallback/         # Fallback audio files
-├── config/               # Configuration files
-├── docker-compose.yml    # Docker deployment config
-├── dockerfile           # Docker image config
-└── package.json         # Node.js dependencies
+│   ├── tracks/        # Downloaded tracks
+│   └── fallback/      # Fallback audio
+├── config/            # Configuration files
+├── docker-compose.yml
+├── Dockerfile
+└── package.json
 ```
-
-### Runtime Configuration
-
-The application supports runtime configuration through the `/api/config` endpoints:
-
-#### Available Configuration Keys:
-- `defaultPlaylistGenre`: Controls which genre of default playlists to use
-  - Values: `"all"`, `"pop"`, `"rock"`, `"mix"`, etc.
-  - Default: `"mix"`
-
-### Cache Management
-
-The system automatically manages audio file caching:
-- **Cache Size Limit**: 1GB by default
-- **Location**: `./cache` directory  
-- **Cleanup**: Automatic when cache exceeds size limit
-- **Strategy**: Least recently used (LRU) eviction
-
-### Audio Processing
-
-- **Format**: MP3 streaming at 128 kbps
-- **FFmpeg**: Used for audio processing and streaming
-- **Bitrate Throttling**: Automatic bandwidth management
-- **Sample Rate**: 44.1 kHz, 2 channels (stereo)
-
-## Architecture 🏗️
-
-MRadio follows a modular, service-oriented architecture designed for scalability and maintainability.
-
-### Core Components
-
-#### 1. **HTTP Server & Streaming Engine**
-- **Express.js** REST API server
-- **FFmpeg** audio processing pipeline
-- **Dual Streaming Support**: Icecast + direct HTTP MP3 streaming
-- **Socket.IO** for live client updates
-- **Automatic Fallback**: Direct HTTP streaming when Icecast unavailable
-
-#### 2. **Queue Management System**
-- **Dynamic Queue Processing**: Real-time song queue management
-- **Priority System**: Support for adding songs to top of queue
-- **Smart Fallback**: Automatic playlist rotation when queue is empty
-- **Cache Integration**: Intelligent file caching with LRU eviction
-
-#### 3. **Multi-Platform Integration**
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│   YouTube   │    │   JioSaavn   │    │ SoundCloud  │
-│   API/YT-DL │    │   API        │    │   Scraper   │
-└─────────────┘    └──────────────┘    └─────────────┘
-       │                   │                   │
-       └───────────────────┼───────────────────┘
-                          │
-               ┌──────────────────┐
-               │  Metadata Engine │
-               │  (Spotify API)   │
-               └──────────────────┘
-                          │
-               ┌──────────────────┐
-               │   Audio Engine   │
-               │   (FFmpeg)       │
-               └──────────────────┘
-```
-
-#### 4. **Data Management**
-- **JSON-based Storage**: Lightweight persistence for queues and configs
-- **File System Caching**: Smart audio file management
-- **Memory Management**: Efficient client connection handling
-
-#### 5. **Security & Authentication**
-- **Token-based Authentication**: 256-bit secure tokens
-- **Admin Access Control**: Separate admin authentication layer
-- **Request Validation**: Input sanitization and validation
-
-### Service Layer Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     API Layer                               │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
-│  │  Controllers│ │ Middleware  │ │       Routes            │ │
-│  └─────────────┘ └─────────────┘ └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                               │
-┌─────────────────────────────────────────────────────────────┐
-│                   Service Layer                             │
-│  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐ │
-│  │ API Service  │ │Config Service│ │ Metadata Service      │ │
-│  └──────────────┘ └──────────────┘ └───────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                               │
-┌─────────────────────────────────────────────────────────────┐
-│                    Core Layer                               │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
-│  │Queue Engine │ │Cache Manager│ │   Stream Manager        │ │
-│  └─────────────┘ └─────────────┘ └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                               │
-┌─────────────────────────────────────────────────────────────┐
-│                 Platform Layer                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
-│  │   YouTube   │ │  JioSaavn   │ │      SoundCloud         │ │
-│  └─────────────┘ └─────────────┘ └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Design Patterns
-
-1. **Factory Pattern**: Platform-specific music service instantiation
-2. **Observer Pattern**: Real-time client notifications via WebSocket
-3. **Strategy Pattern**: Multiple music source handling
-4. **Queue Pattern**: FIFO song processing with priority support
-5. **Cache Pattern**: LRU audio file caching system
-
-### Scalability Features
-
-- **Stateless Design**: Easy horizontal scaling
-- **Docker Support**: Container-based deployment
-- **Modular Components**: Independent service scaling
-- **Efficient Streaming**: Low-latency audio delivery
-- **Resource Management**: Automatic cleanup and optimization
-
-## Troubleshooting 🔧
-
-### Common Issues
-
-#### 1. **FFmpeg Not Found**
-```bash
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Or set FFMPEG_ENV=production to use static build
-```
-
-#### 2. **Permission Issues with Cache/Data Directories**
-```bash
-# Create directories with proper permissions
-mkdir -p cache data logs media/tracks media/fallback config
-chmod -R 755 cache data logs media config
-```
-
-#### 3. **Port Already in Use**
-```bash
-# Check what's using port 9126
-lsof -i :9126
-
-# Kill the process or change PORT in .env
-PORT=9127
-```
-
-#### 4. **API Authentication Errors**
-- Verify `.env` file has correct admin keys
-- Ensure token generation was successful
-- Check token is included in request headers
-
-#### 5. **Audio Stream Issues**
-- Verify FFmpeg installation
-- Check file permissions in tracks/cache directories
-- Ensure adequate disk space for caching
-
-#### 6. **Icecast Connection Issues**
-```bash
-# Check if Icecast server is running
-netstat -tlnp | grep :8000
-
-# Test Icecast connection
-curl -I http://localhost:8000/
-
-# Check MRadio logs for Icecast errors
-tail -f logs/app.log | grep -i icecast
-```
-
-#### 7. **Icecast Authentication Errors**
-- Verify `ICECAST_PASSWORD` matches source password in icecast.xml
-- Check mount point configuration in Icecast
-- Ensure source credentials are correct
-
-### Performance Optimization
-
-1. **Increase Cache Size**: Modify `CACHE_SIZE` in constants
-2. **Optimize Queue Size**: Adjust `DEFAULT_QUEUE_SIZE` based on usage
-3. **Monitor Logs**: Check `logs/` directory for errors
-4. **Resource Monitoring**: Watch CPU/memory usage during streaming
-
-### Development Tips
-
-1. **Enable Debug Logging**: Set `NODE_ENV=development`
-2. **Hot Reload**: Use `nodemon` for development
-3. **API Testing**: Use Postman or curl for endpoint testing
-4. **Docker Development**: Use volume mounts for live code updates
-
-## License 📝
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Features Overview 📋
-
-### Completed Features ✅
-- ✅ Multi-platform music streaming (YouTube, JioSaavn, SoundCloud)
-- ✅ Icecast server integration for professional broadcasting
-- ✅ Dual streaming support (Icecast + direct HTTP)
-- ✅ Real-time MP3 streaming with metadata support
-- ✅ Dynamic queue management with priority support
-- ✅ Smart caching system with LRU eviction
-- ✅ Block list management for content filtering
-- ✅ Token-based authentication system
-- ✅ Admin panel with user management
-- ✅ WebSocket integration for real-time updates
-- ✅ Docker containerization support
-- ✅ Default playlist rotation system
-- ✅ Metadata enrichment via Spotify API
-- ✅ Automatic fallback system
-- ✅ RESTful API with comprehensive endpoints
-- ✅ Configurable settings management
-- ✅ Comprehensive logging system
-
-### Roadmap 🚀
-- 🔄 Web UI dashboard for easy management
-- 🔄 Playlist import/export functionality
-- 🔄 User favorites and personal playlists
-- 🔄 Advanced analytics and reporting
-- 🔄 Mobile app support
-- 🔄 Social features (voting, requests)
-- 🔄 Enhanced audio quality options
-- 🔄 Multi-room audio support
-
-## Contributing 🤝
-
-We welcome contributions! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Development Setup
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Install dependencies (`npm install`)
-4. Set up environment variables (`.env` file)
-5. Run the development server (`npm start`)
-6. Make your changes and test thoroughly
-7. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-8. Push to the branch (`git push origin feature/AmazingFeature`)
-9. Open a Pull Request
-
-### Contribution Guidelines
-- Follow the existing code style and patterns
-- Add tests for new features
-- Update documentation for any API changes
-- Ensure Docker builds work correctly
-- Test on multiple platforms when possible
-
-## Acknowledgments 🙏
-
-- **Music Platform APIs**: Thanks to YouTube, JioSaavn, SoundCloud, and Spotify for their APIs
-- **Open Source Community**: Various dependencies and tools that make this project possible
-- **FFmpeg Team**: For the excellent audio processing capabilities
-- **Node.js Ecosystem**: Express, Socket.IO, and other fantastic libraries
-- **Docker Community**: For containerization best practices
-
-## Support 💪
-
-If you find this project useful, please consider:
-- ⭐️ **Starring** the repository on GitHub
-- 🐛 **Reporting issues** and bugs
-- 💡 **Suggesting features** and improvements
-- 🤝 **Contributing** code or documentation
-- 📢 **Sharing** the project with others
-
-### Get Help
-- 📚 **Documentation**: Read this README and API docs
-- 🐛 **Issues**: [GitHub Issues](https://github.com/GauravGhost/MRadio/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/GauravGhost/MRadio/discussions)
-- 📧 **Contact**: Reach out via GitHub profile
 
 ---
 
-**Made with ❤️ by [GauravGhost](https://github.com/GauravGhost)**
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| FFmpeg not found | Install FFmpeg: `sudo apt install ffmpeg` or `brew install ffmpeg` |
+| Port already in use | Change `PORT` in `.env` or kill process using port 9126 |
+| Permission denied | Run: `chmod -R 755 cache data logs media config` |
+| No audio stream | Check FFmpeg installation and verify file permissions |
+| Icecast connection failed | Verify Icecast is running: `curl -I http://localhost:8000/` |
+| API auth errors | Verify `.env` has correct admin keys and token is included in headers |
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
