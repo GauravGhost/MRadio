@@ -40,6 +40,8 @@ class DefaultPlaylistMetadataManager extends BaseQueueManager {
         const allData = super.getAll();
         if (!Object.keys(filters).length) return allData;
 
+        const needsPlaylist = filters.isActive !== undefined || filters.genre || filters.channelId !== undefined;
+
         return allData.filter(item => {
             let matches = true;
 
@@ -48,12 +50,14 @@ class DefaultPlaylistMetadataManager extends BaseQueueManager {
             if (filters.playlistId && item.playlistId !== filters.playlistId) matches = false;
 
             // Filter by playlist metadata - requires checking against playlist data
-            if (filters.isActive !== undefined || filters.genre) {
+            if (needsPlaylist) {
                 const playlist = this.getPlaylistMetadata(item.playlistId);
-                
+
                 if (playlist) {
                     if (filters.isActive !== undefined && playlist.isActive !== filters.isActive) matches = false;
                     if (filters.genre && playlist.genre !== filters.genre) matches = false;
+                    // channelId null/undefined means the global pool
+                    if (filters.channelId !== undefined && (playlist.channelId ?? null) !== (filters.channelId ?? null)) matches = false;
                 } else {
                     matches = false;
                 }

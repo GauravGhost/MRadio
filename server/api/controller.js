@@ -446,11 +446,12 @@ export const updateCommonConfig = async (req, res) => {
 
 export const generateToken = async (req, res) => {
     try {
-        if (!req.body?.username) {
+        const { username, role, channels } = req.body || {};
+        if (!username) {
             return res.status(400).json(errorRes(null, "Username parameter is required", "BAD_REQUEST"));
         }
-        const response = await service.generateToken(req.body.username);
-        res.status(200).json(successRes(response, "Admin user token generated successfully"));
+        const response = await service.generateToken(username, role, channels);
+        res.status(200).json(successRes(response, "User token generated successfully"));
     } catch (error) {
         logger.error("Error in generateToken API", { error: error.message });
         res.status(400).json(errorRes(error, "Failed to generate token", "BAD_REQUEST"));
@@ -467,17 +468,35 @@ export const getAllTokens = async (req, res) => {
     }
 };
 
-export const removeTokenByIndex = async (req, res) => {
+export const removeTokenByUsername = async (req, res) => {
     try {
-        const { index } = req.params;
-        if (!index || isNaN(+index)) {
-            return res.status(400).json(errorRes(null, "Valid token index parameter is required", "BAD_REQUEST"));
+        const { username } = req.params;
+        if (!username) {
+            return res.status(400).json(errorRes(null, "Username parameter is required", "BAD_REQUEST"));
         }
-        const response = await service.removeTokenByIndex(parseInt(index));
+        const response = await service.removeTokenByUsername(username);
         res.status(200).json(successRes(response, "Token revoked successfully"));
     } catch (error) {
-        logger.error("Error in removeTokenByIndex API", { error: error.message });
+        logger.error("Error in removeTokenByUsername API", { error: error.message });
         res.status(400).json(errorRes(error, "Failed to revoke token", "BAD_REQUEST"));
+    }
+};
+
+export const updateTokenChannels = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { channels } = req.body || {};
+        if (!username) {
+            return res.status(400).json(errorRes(null, "Username parameter is required", "BAD_REQUEST"));
+        }
+        if (!Array.isArray(channels) || !channels.length) {
+            return res.status(400).json(errorRes(null, "channels must be a non-empty array", "BAD_REQUEST"));
+        }
+        const response = await service.updateTokenChannels(username, channels);
+        res.status(200).json(successRes(response, "Token channels updated successfully"));
+    } catch (error) {
+        logger.error("Error in updateTokenChannels API", { error: error.message });
+        res.status(400).json(errorRes(error, "Failed to update token channels", "BAD_REQUEST"));
     }
 };
 

@@ -1,7 +1,13 @@
 import secret from "./secret.js";
 
-export const SPOTIFY_TOKEN_LOCATION = "config/spotify.json";
 export const AUTH_TOKEN_LOCATION = "config/authToken.json";
+
+export const TOKEN_ROLES = {
+    ADMIN: "admin",
+    USER: "user"
+};
+export const DEFAULT_TOKEN_ROLE = TOKEN_ROLES.USER;
+export const DEFAULT_CHANNEL_ID = "default";
 
 export const DEFAULT_CACHE_LOCATION = "cache";
 
@@ -19,14 +25,12 @@ export const DEFAULT_QUEUE_SIZE = process.env.QUEUE_BUFFER_SIZE ? parseInt(proce
 export const SONG_METADATA_UPDATE_TIME = 2 * 24 * 60 * 60 * 1000; // 2 days
 export const CACHE_SIZE = 1024 * 1024 * 1024; // 1 GB
 
-// Session resume across restarts.
-// Downtime longer than this is treated as "too much delay": start a fresh session instead of resuming.
+
 export const RESUME_MAX_GAP_MS = (process.env.RESUME_MAX_GAP_SECONDS ? parseInt(process.env.RESUME_MAX_GAP_SECONDS, 10) : 180) * 1000;
-// Don't resume a track that is within this many seconds of finishing; advance instead.
 export const RESUME_MIN_REMAINING_SECONDS = 5;
 
 export const COMMON_CONFIG_KEYS = {
-    defaultPlaylistGenre: "defaultPlaylistGenre", // string
+    defaultPlaylistGenre: "defaultPlaylistGenre",
 };
 
 export const STREAM_MEDIA_TYPE = {

@@ -6,7 +6,7 @@ import BlockListManager from "../utils/queue/blockListManager.js";
 import { generatePlaylistMetadata, generateSongMetadata } from "./metadataFetcherService.js";
 import { durationFormatter } from "../utils/utils.js";
 import logger from "../utils/logger.js";
-import { DEFAULT_QUEUE_SIZE } from "../utils/constant.js";
+import { DEFAULT_CHANNEL_ID, DEFAULT_QUEUE_SIZE, DEFAULT_TOKEN_ROLE, TOKEN_ROLES } from "../utils/constant.js";
 import DefaultPlaylistMetadataManager from "../utils/queue/defaultPlaylistMetadataManager.js";
 import DefaultPlaylistManager from "../utils/queue/defaultPlaylistManager.js";
 
@@ -105,7 +105,7 @@ class Service {
 
     async getQueueList(channelId = 'default') {
         const ch = channelManager.getChannel(channelId);
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         const trackList = ch.tracks;
         const queueSongList = songQueue.printQueue();
 
@@ -127,7 +127,7 @@ class Service {
         if (isBlocked) {
             throw new Error("Song is blocked! You cannot play this song.");
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         songQueue.addToQueue(metadata);
         
         const ch = channelManager.getChannel(channelId);
@@ -142,7 +142,7 @@ class Service {
         if (isBlocked) {
             throw new Error("Song is blocked! You cannot play this song.");
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         songQueue.addToFront(metadata);
 
         const ch = channelManager.getChannel(channelId);
@@ -156,7 +156,7 @@ class Service {
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         songQueue.addManyToQueue(metadata);
         
         const ch = channelManager.getChannel(channelId);
@@ -170,7 +170,7 @@ class Service {
         if (metadata.length <= 0) {
             throw new Error("No songs found in the playlist.");
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         songQueue.addManyToTop(metadata);
         
         const ch = channelManager.getChannel(channelId);
@@ -185,7 +185,7 @@ class Service {
         if (index <= trackList.length) {
             throw new Error(`Cannot remove actively buffered track #${index}. Use skip to advance.`);
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         const removedItem = songQueue.removeAtIndex(index - trackList.length);
         if (!removedItem) {
             throw new Error("Invalid index or queue is empty.");
@@ -197,7 +197,7 @@ class Service {
         if (!requestedBy) {
             throw new Error("Username is required");
         }
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         const removedItem = songQueue.removeLastSongRequestedByUser(requestedBy);
         
         if (!removedItem) {
@@ -210,7 +210,7 @@ class Service {
     async clearQueue(channelId = 'default') {
         const ch = channelManager.getChannel(channelId);
         ch.clearQueue();
-        const songQueue = new SongQueueManager();
+        const songQueue = new SongQueueManager(channelId);
         songQueue.clear();
         await ch.ensureQueueSize();
         return { cleared: true, channelId };
@@ -222,11 +222,27 @@ class Service {
      * ==========================================
      */
 
-    async generateToken(username) {
+    validateChannels(channels) {
+        if (!Array.isArray(channels) || channels.length === 0) {
+            throw new Error("'channels' must be a non-empty array");
+        }
+        const existing = new Set(channelManager.getAllChannels().map(channel => channel.id));
+        const unknown = channels.filter(channel => !existing.has(channel));
+        if (unknown.length) {
+            throw new Error(`Unknown channel(s): ${unknown.join(", ")}`);
+        }
+        return [...new Set(channels)];
+    }
+
+    async generateToken(username, role = DEFAULT_TOKEN_ROLE, channels = [DEFAULT_CHANNEL_ID]) {
+        if (!Object.values(TOKEN_ROLES).includes(role)) {
+            throw new Error(`Invalid role '${role}'. Allowed roles: ${Object.values(TOKEN_ROLES).join(", ")}`);
+        }
+        const tokenChannels = this.validateChannels(channels);
         const token = generate256BitToken();
         const tokenManager = new TokenManager();
-        tokenManager.addToken({ token, username });
-        return { token, username };
+        tokenManager.addToken({ token, username, role, channels: tokenChannels });
+        return { token, username, role, channels: tokenChannels };
     }
 
     async getAllTokens() {
@@ -234,13 +250,23 @@ class Service {
         return tokenManager.printQueue();
     }
 
-    async removeTokenByIndex(index) {
+    async removeTokenByUsername(username) {
         const tokenManager = new TokenManager();
-        const removed = tokenManager.removeTokenByIndex(index);
+        const removed = tokenManager.removeTokenByUsername(username);
         if (!removed) {
-            throw new Error("Failed to remove token: Invalid index or queue is empty");
+            throw new Error(`Failed to revoke token: no token found for username '${username}'`);
         }
         return removed;
+    }
+
+    async updateTokenChannels(username, channels) {
+        const tokenChannels = this.validateChannels(channels);
+        const tokenManager = new TokenManager();
+        const updated = tokenManager.updateTokenChannels(username, tokenChannels);
+        if (!updated) {
+            throw new Error(`Failed to update token: no token found for username '${username}'`);
+        }
+        return updated;
     }
 
     /**
@@ -319,8 +345,11 @@ class Service {
      * ==========================================
      */
 
-    async addDefaultPlaylist({ playlistId, title, source, requestedBy = "auto", isActive = true, genre = "mix" }) {
+    async addDefaultPlaylist({ playlistId, title, source, requestedBy = "auto", isActive = true, genre = "mix", channelId = null }) {
         try {
+            if (channelId) {
+                this.validateChannels([channelId]);
+            }
             const metadata = await generatePlaylistMetadata(playlistId, source, requestedBy);
             if (metadata.length <= 0) {
                 throw new Error("No songs found in the playlist.");
@@ -332,10 +361,11 @@ class Service {
                 source,
                 metadataUpdatedAt: new Date(),
                 isActive,
-                genre
+                genre,
+                channelId: channelId || null
             });
             const metadataStore = new DefaultPlaylistMetadataManager();
-            const updatedMetadata = metadata.map(data => ({ ...data, playlistId }));
+            const updatedMetadata = metadata.map(data => ({ ...data, playlistId, channelId: channelId || null }));
             metadataStore.addMany(updatedMetadata);
             return { added: true, total: metadata.length };
         } catch (error) {

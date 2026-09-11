@@ -69,10 +69,6 @@ export const saveBlockListJson = (data) => {
     return fsHelper.writeToJson(BLOCK_LIST_LOCATION, data);
 }
 
-export const getSpotifyConfigJson = () => {
-    return fsHelper.readFromJson(SPOTIFY_TOKEN_LOCATION, {});
-}
-
 export const getDefaultPlaylistJson = () => {
     return fsHelper.readFromJson(DEFAULT_PLAYLIST_LOCATION, []);
 }

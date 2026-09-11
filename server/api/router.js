@@ -44,63 +44,65 @@ import {
     updateCommonConfig,
     generateToken,
     getAllTokens,
-    removeTokenByIndex,
+    removeTokenByUsername,
+    updateTokenChannels,
     getIcecastStatus,
     getHealth,
     updateCookies
 } from './controller.js';
-import { isAdmin, isValidUser } from './middleware.js';
+import { isAdmin, requireAdmin, requireUser } from './middleware.js';
 
 const router = express.Router();
 
 // 0. Health Check Route
 router.get("/health", getHealth);
 
-// 1. Channel Management Routes
+// 1. Channel Management Routes (Admin only)
 router.get("/channels", getAllChannels);
-router.post("/channels", isValidUser, createChannel);
+router.post("/channels", requireAdmin, createChannel);
 router.get("/channels/:channelId", getChannelDetails);
-router.patch("/channels/:channelId", isValidUser, updateChannel);
-router.delete("/channels/:channelId", isValidUser, deleteChannel);
-router.post("/channels/:channelId/restart", isValidUser, restartChannel);
+router.patch("/channels/:channelId", requireAdmin, updateChannel);
+router.delete("/channels/:channelId", requireAdmin, deleteChannel);
+router.post("/channels/:channelId/restart", requireAdmin, restartChannel);
 
 // 2. Playback Control Routes (Channel Scoped)
 router.get("/channels/:channelId/playback/current", getCurrentSong);
 router.get("/channels/:channelId/playback/upcoming", getUpcomingSong);
-router.post("/channels/:channelId/playback/pause", isValidUser, pauseSong);
-router.post("/channels/:channelId/playback/resume", isValidUser, resumeSong);
-router.post("/channels/:channelId/playback/skip", isValidUser, skipSong);
-router.post("/channels/:channelId/playback/previous", isValidUser, previousSong);
-router.post("/channels/:channelId/playback/seek", isValidUser, seekSong);
+router.post("/channels/:channelId/playback/pause", requireUser, pauseSong);
+router.post("/channels/:channelId/playback/resume", requireUser, resumeSong);
+router.post("/channels/:channelId/playback/skip", requireUser, skipSong);
+router.post("/channels/:channelId/playback/previous", requireUser, previousSong);
+router.post("/channels/:channelId/playback/seek", requireUser, seekSong);
 
 // 3. Queue Management Routes (Channel Scoped)
 router.get("/channels/:channelId/queue", getQueueList);
-router.post("/channels/:channelId/queue/songs", isValidUser, addSongToQueue);
-router.delete("/channels/:channelId/queue/songs/:index", isValidUser, removeSongFromQueue);
-router.delete("/channels/:channelId/queue/songs/user/:requestedBy", isValidUser, removeLastSongRequestedByUser);
-router.post("/channels/:channelId/queue/playlists", isValidUser, addPlaylistToQueue);
-router.delete("/channels/:channelId/queue", isValidUser, clearQueue);
+router.post("/channels/:channelId/queue/songs", requireUser, addSongToQueue);
+router.delete("/channels/:channelId/queue/songs/:index", requireUser, removeSongFromQueue);
+router.delete("/channels/:channelId/queue/songs/user/:requestedBy", requireUser, removeLastSongRequestedByUser);
+router.post("/channels/:channelId/queue/playlists", requireUser, addPlaylistToQueue);
+router.delete("/channels/:channelId/queue", requireUser, clearQueue);
 
 // 4. System Default Playlists Routes
-router.get("/playlists/default", isValidUser, getDefaultPlaylists);
-router.post("/playlists/default", isValidUser, addDefaultPlaylist);
-router.delete("/playlists/default/:index", isValidUser, removeDefaultPlaylist);
-router.patch("/playlists/default/:index/status", isValidUser, updateDefaultPlaylistStatus);
+router.get("/playlists/default", requireUser, getDefaultPlaylists);
+router.post("/playlists/default", requireUser, addDefaultPlaylist);
+router.delete("/playlists/default/:index", requireUser, removeDefaultPlaylist);
+router.patch("/playlists/default/:index/status", requireUser, updateDefaultPlaylistStatus);
 
 // 5. Blocklist Routes
-router.get("/blocklist", isValidUser, getBlocklist);
-router.post("/blocklist", isValidUser, blockSong);
-router.delete("/blocklist/name/:songName", isValidUser, unblockSongByName);
-router.delete("/blocklist/index/:index", isValidUser, unblockSongByIndex);
-router.delete("/blocklist", isValidUser, clearBlocklist);
-router.get("/blocklist/check", isValidUser, checkSongBlocked);
+router.get("/blocklist", requireUser, getBlocklist);
+router.post("/blocklist", requireUser, blockSong);
+router.delete("/blocklist/name/:songName", requireUser, unblockSongByName);
+router.delete("/blocklist/index/:index", requireUser, unblockSongByIndex);
+router.delete("/blocklist", requireUser, clearBlocklist);
+router.get("/blocklist/check", requireUser, checkSongBlocked);
 
-// 6. System & Config Routes
-router.get("/config", isValidUser, getCommonConfig);
-router.post("/config", isValidUser, updateCommonConfig);
+// 6. System & Config Routes (Admin only)
+router.get("/config", requireAdmin, getCommonConfig);
+router.post("/config", requireAdmin, updateCommonConfig);
 router.get("/admin/tokens", isAdmin, getAllTokens);
 router.post("/admin/token", isAdmin, generateToken);
-router.delete("/admin/tokens/:index", isAdmin, removeTokenByIndex);
+router.delete("/admin/tokens/username/:username", isAdmin, removeTokenByUsername);
+router.patch("/admin/tokens/username/:username", isAdmin, updateTokenChannels);
 router.post("/admin/cookies", isAdmin, updateCookies);
 router.get("/system/icecast", getIcecastStatus);
 

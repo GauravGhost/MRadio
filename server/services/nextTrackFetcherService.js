@@ -48,35 +48,46 @@ const checkAndRefreshMetadata = async (playlist) => {
     if (now - metadataDate > TWO_DAYS_MS) {
         logger.info("Updating the metadata for : " + playlist.title);
         const apiService = new Service();
-        // First remove old metadata
         await apiService.removeDefaultPlaylist({ index: playlist.index });
-        // Then add fresh metadata
         await apiService.addDefaultPlaylist({
             playlistId: playlist.playlistId,
             title: playlist.title,
             source: playlist.source,
             isActive: playlist.isActive,
-            genre: playlist.genre
+            genre: playlist.genre,
+            channelId: playlist.channelId || null
         });
     }
 }
 
-const emptySongQueueHandler = async () => {
+const emptySongQueueHandler = async (channelId = 'default') => {
     try {
         const defaultPlaylistMetadata = new DefaultPlaylistMetadataManager();
         const defaultPlaylistStore = new DefaultPlaylistManager();
-        const genre = await commonConfigService.get(COMMON_CONFIG_KEYS.defaultPlaylistGenre);
+
+        const allPlaylists = defaultPlaylistStore.getAll()
+            .map((playlist, index) => ({ ...playlist, index: index + 1 }));
+        const channelPlaylists = allPlaylists.filter(p => p.channelId === channelId);
+       
+        const hasOwnPlaylists = channelPlaylists.length > 0;
+
+        let genre = "all";
+        if (!hasOwnPlaylists) {
+            genre = await commonConfigService.get(COMMON_CONFIG_KEYS.defaultPlaylistGenre);
+        }
+
+        const activePlaylists = (hasOwnPlaylists ? channelPlaylists : allPlaylists)
+            .filter(p => hasOwnPlaylists
+                ? p.channelId === channelId && p.isActive
+                : !p.channelId && p.isActive && (genre === "all" || p.genre === genre));
+
+        await Promise.all(activePlaylists.map(playlist => checkAndRefreshMetadata(playlist)));
 
         const filter = {
             isActive: true,
             genre: genre === "all" ? undefined : genre,
-        }
-
-        const activePlaylists = defaultPlaylistStore.getAll()
-            .map((playlist, index) => ({ ...playlist, index: index + 1 }))
-            .filter(p => p.isActive && (genre === "all" || p.genre === genre));
-
-        await Promise.all(activePlaylists.map(playlist => checkAndRefreshMetadata(playlist)));
+            channelId: hasOwnPlaylists ? channelId : null,
+        };
 
         const defaultPlaylistArr = defaultPlaylistMetadata.getAll(filter);
         if (!defaultPlaylistArr.length) {
@@ -158,7 +169,7 @@ const fetchByUrlType = async (songData) => {
  * @returns 
  */
 export const fetchNextTrack = async (channelId = 'default', genre = 'all') => {
-    const songQueue = new SongQueueManager();
+    const songQueue = new SongQueueManager(channelId);
     let retryCount = 0;
     const MAX_RETRIES = 3;
 
@@ -167,7 +178,7 @@ export const fetchNextTrack = async (channelId = 'default', genre = 'all') => {
             const currentTrack = songQueue.getFirstFromQueue();
             let songResult;
 
-            const trackToProcess = currentTrack ?? await emptySongQueueHandler();
+            const trackToProcess = currentTrack ?? await emptySongQueueHandler(channelId);
 
             const cachedPath = cacheManager.getFromCache(trackToProcess.title);
             if (cachedPath) {

@@ -2,6 +2,7 @@ import path from 'path';
 import { Channel } from './channel.js';
 import fsHelper from '../utils/helper/fs-helper.js';
 import logger from '../utils/logger.js';
+import TokenManager from '../utils/queue/tokenManager.js';
 import { DEFAULT_TRACKS_LOCATION } from '../utils/constant.js';
 
 const DATA_FILE = path.join(process.cwd(), 'data', 'channels.json');
@@ -209,6 +210,15 @@ class ChannelManager {
         await channel.cleanupCurrentStream();
         this.channels.delete(id);
         this.saveChannelsToDisk();
+
+        try {
+            const pruned = new TokenManager().removeChannelFromAllTokens(id);
+            if (pruned > 0) {
+                logger.info(`[ChannelManager] Removed channel "${id}" from ${pruned} token(s)`);
+            }
+        } catch (err) {
+            logger.warn(`[ChannelManager] Failed to prune channel "${id}" from tokens:`, err);
+        }
 
         logger.info(`[ChannelManager] Deleted channel: ${id}`);
         return { deleted: true, id };

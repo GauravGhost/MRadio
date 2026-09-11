@@ -116,18 +116,71 @@ docker compose -f docker-compose.prod.yml up -d
 
 | Header | Description |
 |--------|-------------|
-| `x-token-key` | User token for authenticated endpoints |
-| `x-admin-api-key` | Admin API key for admin endpoints |
-| `x-admin-token-key` | Admin token key for admin endpoints |
+| `x-token-key` | User token for music endpoints (playback, queue, playlists, blocklist) |
+| `x-admin-api-key` | Admin API key (master credential) |
+| `x-admin-token-key` | Admin token key (master credential) |
 
-### Generate User Token (Admin Only)
+**Token roles.** Tokens issued via `/api/admin/token` carry a `role`:
+
+| Role | Access |
+|------|--------|
+| `user` (default) | Playback, queue, default playlists, blocklist — but only for the channels assigned to the token. Cannot touch channel setup or config. |
+| `admin` | Everything `user` can do, on every channel, plus create/update/delete/restart channels and read/update config. Ignores `channels`. |
+
+**Channel assignment.** Each token carries a `channels` list. A `user` token may only act on the
+channels in that list — requests for any other channel return `403`. This is enforced per channel, so
+you can hand a client a key that controls only its own channel:
+
+```json
+{ "token": "<hex>", "username": "krBot", "role": "user", "channels": ["korean"] }
+```
+
+**Unknown channels are rejected.** Any channel-scoped request naming a channel that does not exist
+returns `404` (`NOT_FOUND`) — for every caller, including admin tokens and the env admin credentials.
+The server never silently retargets such a request at the `default` channel, so a typo fails loudly
+instead of quietly playing on (or pausing) the wrong channel.
+
+The song queue is **per channel**: requests added through one channel are only ever played by that
+channel. Fallback playlists can likewise be pinned to a channel (`channelId`); a channel with its own
+active playlists uses only those, otherwise it falls back to the global (channel-less) playlist pool.
+
+Env admin credentials (`x-admin-api-key` + `x-admin-token-key`) are the master key: they satisfy every route and are the only credential that can list, mint, or revoke tokens. In the tables below, `Token` means any valid `x-token-key` (role `user` or `admin`) or the env admin credentials.
+
+### Generate a Token (Admin Only)
 
 ```bash
 curl -X POST http://localhost:9126/api/admin/token \
   -H "Content-Type: application/json" \
   -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
   -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
-  -d '{"username": "username"}'
+  -d '{"username": "krBot", "role": "user", "channels": ["korean"]}'
+```
+
+`role` is optional and defaults to `user`. `channels` is optional and defaults to `["default"]`.
+Allowed roles: `user`, `admin`. Every channel in `channels` must already exist.
+
+### Reassign a Token's Channels (Admin Only)
+
+```bash
+curl -X PATCH http://localhost:9126/api/admin/tokens/username/krBot \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
+  -d '{"channels": ["default", "korean"]}'
+```
+
+### Revoke a Token (Admin Only)
+
+```bash
+# By username (stable — recommended)
+curl -X DELETE http://localhost:9126/api/admin/tokens/username/DiscordMusicBot \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY"
+
+# By 1-based index
+curl -X DELETE http://localhost:9126/api/admin/tokens/1 \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY"
 ```
 
 ### Channel Endpoints
@@ -135,11 +188,11 @@ curl -X POST http://localhost:9126/api/admin/token \
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/api/channels` | List all channels | No |
-| POST | `/api/channels` | Create new channel | Token |
+| POST | `/api/channels` | Create new channel | Admin |
 | GET | `/api/channels/:id` | Get channel details | No |
-| PATCH | `/api/channels/:id` | Update channel | Token |
-| DELETE | `/api/channels/:id` | Delete channel | Token |
-| POST | `/api/channels/:id/restart` | Restart channel | Token |
+| PATCH | `/api/channels/:id` | Update channel | Admin |
+| DELETE | `/api/channels/:id` | Delete channel | Admin |
+| POST | `/api/channels/:id/restart` | Restart channel | Admin |
 
 ### Playback Endpoints
 
@@ -191,7 +244,7 @@ curl -X POST http://localhost:9126/api/channels/default/queue/songs \
 | DELETE | `/api/blocklist/name/:name` | Unblock by name | Token |
 | DELETE | `/api/blocklist/index/:index` | Unblock by index | Token |
 | DELETE | `/api/blocklist` | Clear blocklist | Token |
-| GET | `/api/blocklist/check?name=X` | Check if blocked | Token |
+| GET | `/api/blocklist/check?songName=X` | Check if blocked | Token |
 
 ### System Endpoints
 
@@ -199,10 +252,12 @@ curl -X POST http://localhost:9126/api/channels/default/queue/songs \
 |--------|----------|-------------|------|
 | GET | `/api/health` | Health check | No |
 | GET | `/api/system/icecast` | Icecast status | No |
-| GET | `/api/config` | Get config | Token |
-| POST | `/api/config` | Update config | Token |
+| GET | `/api/config` | Get config | Admin |
+| POST | `/api/config` | Update config | Admin |
 | GET | `/api/admin/tokens` | List all tokens | Admin |
-| DELETE | `/api/admin/tokens/:index` | Remove token | Admin |
+| POST | `/api/admin/token` | Generate token | Admin |
+| DELETE | `/api/admin/tokens/username/:username` | Revoke token by username | Admin |
+| PATCH | `/api/admin/tokens/username/:username` | Reassign token channels | Admin |
 | POST | `/api/admin/cookies` | Update cookies | Admin |
 
 ### Stream URLs

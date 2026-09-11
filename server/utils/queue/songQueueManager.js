@@ -1,8 +1,11 @@
 import { getQueueListJson, saveQueueListJson, durationFormatter } from "../utils.js";
 import BaseQueueManager from "./baseQueueManager.js";
+import logger from "../logger.js";
+import { DEFAULT_CHANNEL_ID } from "../constant.js";
+
 
 class SongQueueManager extends BaseQueueManager {
-    constructor() {
+    constructor(channelId = DEFAULT_CHANNEL_ID) {
         super({
             readFunction: () => {
                 const queue = getQueueListJson();
@@ -11,7 +14,6 @@ class SongQueueManager extends BaseQueueManager {
                     duration: item.duration ? durationFormatter(item.duration) : "00:00"
                 }));
             },
-            saveFunction: (items) => saveQueueListJson(items),
             validateFunction: (item) => {
                 return typeof item === "object" && item.title && item.url;
             },
@@ -21,6 +23,21 @@ class SongQueueManager extends BaseQueueManager {
             }),
             duplicateCheckKey: "url"
         });
+
+        this.channelId = channelId;
+        // Scope the inherited in-memory view to this channel only.
+        this.items = this.items.filter(item => item.channelId === this.channelId);
+    }
+
+    // Merge this channel's items back into the shared file, preserving all other channels' entries.
+    saveItems() {
+        try {
+            const others = getQueueListJson().filter(item => item.channelId !== this.channelId);
+            const mine = this.items.map(item => ({ ...item, channelId: this.channelId }));
+            saveQueueListJson([...others, ...mine]);
+        } catch (error) {
+            logger.error("Error saving queue items:", { message: error.message, stack: error.stack });
+        }
     }
 
     // Alias methods to match existing API
@@ -53,7 +70,7 @@ class SongQueueManager extends BaseQueueManager {
         const index = [...this.items].reverse().findIndex(item => item.requestedBy === requestedBy);
         if (index !== -1) {
             const actualIndex = this.items.length - 1 - index;
-            return this.removeAtIndex(actualIndex + 1); // +1 because removeAtIndex expects 1-based index
+            return this.removeAtIndex(actualIndex + 1); // +1 because removeAtIndex is 1-based
         }
         return null;
     }

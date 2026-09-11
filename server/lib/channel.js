@@ -277,7 +277,7 @@ export class Channel {
                     const song = await fetchNextTrack(this.id, this.genre);
                     
                     if (['auto', 'fallback', 'system'].includes(song.requestedBy)) {
-                        const songQueue = new SongQueueManager();
+                        const songQueue = new SongQueueManager(this.id);
                         if (songQueue.getLength() > 0) {
                             logger.info(`[Channel:${this.id}] Discarding downloaded system track '${song.title}' because user queue has items.`);
                             continue; 
