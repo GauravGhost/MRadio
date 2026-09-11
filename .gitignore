@@ -37,5 +37,8 @@ test.json
 fallback/
 media/
 
+# Woodpecker CI debug metadata files
+*-pipeline-*-metadata.json
+
 # Command Code - local agent state (taste learnings, sessions, plans). Keep local, never commit.
 .commandcode/

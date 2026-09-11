@@ -1,20 +1,17 @@
-FROM node:18
+FROM node:22-alpine
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# wget is required by the compose healthcheck probe
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies
+RUN apk add --no-cache \
     python3 \
-    python3-pip \
-    dnsutils \
+    py3-pip \
+    bind-tools \
     ffmpeg \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+    wget
 
-
-RUN pip3 install --no-cache-dir --break-system-packages --upgrade yt-dlp \
-    || (apt-get update && apt-get install -y yt-dlp && rm -rf /var/lib/apt/lists/*) \
+RUN pip3 install --break-system-packages --upgrade yt-dlp \
     && mkdir -p /opt/yt-dlp \
     && ln -sf "$(command -v yt-dlp)" /opt/yt-dlp/yt-dlp \
     && /opt/yt-dlp/yt-dlp --version
