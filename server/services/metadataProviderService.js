@@ -1,4 +1,5 @@
 import SpotifyAPI from "../lib/spotify.js";
+import LastfmAPI from "../lib/lastfm.js";
 import { DEFAULT_METADATA_PROVIDER_CONFIG } from "../utils/constant.js";
 import secret from "../utils/secret.js";
 import commonConfigService from "./commonConfigService.js";
@@ -18,6 +19,22 @@ const PROVIDERS = {
                 title: track.name,
                 artist: track.artist,
                 provider: "spotify"
+            };
+        }
+    },
+    lastfm: {
+        isConfigured: () => Boolean(secret.LASTFM_API_KEY),
+        async fetch(query) {
+            const lastfm = new LastfmAPI();
+            const track = await lastfm.searchTrack(query);
+            if (!track?.searchQuery) {
+                return null;
+            }
+            return {
+                searchQuery: track.searchQuery,
+                title: track.name,
+                artist: track.artist,
+                provider: "lastfm"
             };
         }
     }

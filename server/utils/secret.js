@@ -7,6 +7,7 @@ export default {
 
     SPOTIFY_CLIEND_ID: process.env.SPOTIFY_CLIEND_ID,
     SPOTIFY_CLIEND_SECRET_ID: process.env.SPOTIFY_CLIEND_SECRET_ID,
+    LASTFM_API_KEY: process.env.LASTFM_API_KEY,
     SOUNDCLOUD_API_KEY: process.env.SOUNDCLOUD_API_KEY,
 
     X_ADMIN_API_KEY: process.env.X_ADMIN_API_KEY,

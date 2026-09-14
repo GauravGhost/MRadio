@@ -44,6 +44,9 @@ X_ADMIN_TOKEN_KEY=your_admin_token_key_here
 SPOTIFY_CLIEND_ID=your_spotify_client_id
 SPOTIFY_CLIEND_SECRET_ID=your_spotify_client_secret
 
+# Get Last.fm API key: https://www.last.fm/api/account/create
+LASTFM_API_KEY=your_lastfm_api_key
+
 # Get SoundCloud key: https://soundcloud.com/you/apps
 SOUNDCLOUD_API_KEY=your_soundcloud_api_key
 
@@ -297,7 +300,8 @@ Metadata providers are a separate, **fetch-only** layer. Their only job is to tu
 (possibly a typo) into an accurate `"title artist"` query; that title is then passed to the download
 sources, which do the actual searching and downloading. They never provide audio.
 
-`GET /api/config?key=metadataProviders` returns `{ "spotify": { "enabled": false } }`. Enable one with
+`GET /api/config?key=metadataProviders` returns
+`{ "spotify": { "enabled": false }, "lastfm": { "enabled": false } }`. Enable one with
 `POST /api/config` (add `?partial=true` to merge):
 
 ```bash
@@ -308,15 +312,22 @@ curl -X POST "http://localhost:9126/api/config?partial=true" \
   -d '{"key": "metadataProviders", "value": {"spotify": {"enabled": true}}}'
 ```
 
-Spotify is disabled by default, so nothing calls it until you enable it. When it is enabled **and**
-credentials are set, the request is normalized before the source search; if it is disabled, has no
-credentials, or fails to match, the raw request is used unchanged.
+Every provider is disabled by default, so nothing calls it until you enable it. When it is enabled
+**and** credentials are set, the request is normalized before the source search; if it is disabled,
+has no credentials, or fails to match, the raw request is used unchanged. Providers are tried in the
+order they appear in `DEFAULT_METADATA_PROVIDER_CONFIG` (`spotify`, then `lastfm`) and the first match
+wins.
 
 Spotify's track search uses app client-credentials and does **not** require a Premium account — only
 the free client id/secret from the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
-(`SPOTIFY_CLIEND_ID` / `SPOTIFY_CLIEND_SECRET_ID`). Adding another provider means registering it in
-`DEFAULT_METADATA_PROVIDER_CONFIG` and adding an implementation in `metadataProviderService.js`;
-sources and download logic are untouched.
+(`SPOTIFY_CLIEND_ID` / `SPOTIFY_CLIEND_SECRET_ID`).
+
+Last.fm's track search only needs the free API key from the
+[Last.fm API account page](https://www.last.fm/api/account/create) (`LASTFM_API_KEY`) — no shared
+secret or user session is required for read-only search.
+
+Adding another provider means registering it in `DEFAULT_METADATA_PROVIDER_CONFIG` and adding an
+implementation in `metadataProviderService.js`; sources and download logic are untouched.
 
 ### Stream URLs
 
@@ -363,6 +374,7 @@ socket.on('queueUpdate', (queueData) => {
 | `X_ADMIN_TOKEN_KEY` | **Yes** | - | Admin token key |
 | `SPOTIFY_CLIEND_ID` | No | - | Spotify client ID (metadata provider, only used when enabled) |
 | `SPOTIFY_CLIEND_SECRET_ID` | No | - | Spotify client secret (metadata provider, only used when enabled) |
+| `LASTFM_API_KEY` | No | - | Last.fm API key (metadata provider, only used when enabled) |
 | `SOUNDCLOUD_API_KEY` | No | - | SoundCloud API Key |
 | `INITIAL_PLAYLIST_ID` | No | - | Default playlist ID |
 | `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud/gaana/spotify) |

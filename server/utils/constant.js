@@ -53,8 +53,12 @@ export const DEFAULT_SOURCE_CONFIG = {
 };
 
 export const DEFAULT_METADATA_PROVIDER_CONFIG = {
-    spotify: { enabled: false }
+    spotify: { enabled: false },
+    lastfm: { enabled: false }
 };
+
+export const LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/";
+export const LASTFM_SEARCH_LIMIT = 50;
 
 export const GANAA_BASE_URL = "https://gaana.com/apiv2";
 export const GANAA_SEARCH_SONGS_URL = (songName) => `${GANAA_BASE_URL}?country=IN&page=0&secType=track&type=search&keyword=${encodeURIComponent(songName)}`;
