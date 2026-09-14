@@ -538,7 +538,11 @@ export const getHealth = async (req, res) => {
         };
 
         if (!report.healthy) {
-            logger.error("Health check failed: stream engine not running", { channels: report.unhealthy });
+            const failingChannels = report.channels.filter((channel) => !channel.streamAlive);
+            logger.error("Health check failed: stream engine not running", {
+                channels: report.unhealthy,
+                engines: failingChannels.map((channel) => ({ id: channel.id, ...channel.engine })),
+            });
             return res.status(503).json(errorRes(
                 `Stream engine not running for channel(s): ${report.unhealthy.join(', ')}`,
                 "Health check failed",

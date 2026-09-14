@@ -44,6 +44,8 @@ export class Channel {
         this.stream = null;
         this.throttle = null;
         this.ffmpegProcess = null;
+        this.ffmpegStartedAt = null;
+        this.lastFfmpegExit = null;
         this.isDownloading = false;
         this.minQueueSize = DEFAULT_QUEUE_SIZE;
         this.previousTrack = null;
@@ -181,7 +183,54 @@ export class Channel {
 
     isStreamAlive() {
         if (!this.playing || this.isIdle) return true;
-        return !!(this.ffmpegProcess && this.ffmpegProcess.exitCode === null && !this.ffmpegProcess.killed);
+        return this.isFfmpegRunning();
+    }
+
+    isFfmpegRunning() {
+        const proc = this.ffmpegProcess;
+        return !!(proc && proc.exitCode === null && !proc.killed);
+    }
+
+    /**
+     * Structured snapshot of the stream engine. Health checks and logs use this so
+     * a failure explains *why* audio stopped (dead FFmpeg, why it died, when and on
+     * which track) instead of only reporting that it did.
+     */
+    getStreamEngineStatus() {
+        const proc = this.ffmpegProcess;
+
+        return {
+            alive: this.isStreamAlive(),
+            playing: this.playing,
+            isIdle: this.isIdle,
+            isTransitioning: this.isTransitioning,
+            ffmpeg: {
+                running: this.isFfmpegRunning(),
+                pid: proc?.pid ?? null,
+                exitCode: proc?.exitCode ?? null,
+                killed: proc?.killed ?? null,
+                startedAt: this.ffmpegStartedAt,
+            },
+            lastFfmpegExit: this.lastFfmpegExit,
+            hasOutputStream: !!this.stream,
+            listeners: this.clients.size,
+            useIcecast: this.useIcecast,
+            icecastConnected: !!this.getIcecastStatus().connected,
+            currentTrack: this.currentTrack?.title ?? null,
+            elapsedSeconds: this.startTime ? Math.floor((Date.now() - this.startTime) / 1000) : null,
+        };
+    }
+
+    /**
+     * Human-readable reason an FFmpeg process was not restarted after exiting.
+     */
+    describeFfmpegExitReason(code) {
+        if (code === 0) return 'track finished normally';
+        if (this.isTransitioning) return 'track transition in progress';
+        if (!this.playing) return 'channel is not playing';
+        if (this.tracks.length === 0) return 'queue is empty';
+        if (this.tracks[0]?.url !== this.currentTrack?.url) return 'current track is no longer at the head of the queue';
+        return `FFmpeg process exited with code ${code}`;
     }
 
     emitSongUpdate(songData) {
@@ -688,32 +737,74 @@ export class Channel {
             'pipe:1'
         ];
 
+        const trackLabel = track.title || track.url || 'Unknown';
+
         this.ffmpegProcess = spawn(getFfmpegPath(), ffmpegArgs, {
             windowsHide: true
         });
+        this.ffmpegStartedAt = new Date().toISOString();
+        this.lastFfmpegExit = null;
+
+        logger.info(`[Channel:${this.id}] FFmpeg started for "${trackLabel}" (seek=${Math.max(0, seekTime)}s, pid=${this.ffmpegProcess.pid})`);
 
         this.stream = this.ffmpegProcess.stdout;
 
         this.ffmpegProcess.stderr.on('data', (data) => {
             const errorMsg = data.toString().toLowerCase();
             if (!errorMsg.includes('config') && !errorMsg.includes('version')) {
-                logger.error(`[Channel:${this.id}] FFmpeg error: ${data.toString()}`);
+                logger.error(`[Channel:${this.id}] FFmpeg error while playing "${trackLabel}": ${data.toString().trim()}`);
             }
         });
 
-        this.ffmpegProcess.once('close', async (code) => {
-            if (code !== 0 && 
-                this.playing && 
-                !this.isTransitioning && 
-                this.tracks.length > 0 && 
-                this.tracks[0]?.url === this.currentTrack?.url) {
-                logger.error(`[Channel:${this.id}] FFmpeg process exited with code ${code}`);
+        // A spawn failure (missing binary, bad args) leaves the engine dead without
+        // ever emitting 'close', so it must be logged and tracked explicitly.
+        this.ffmpegProcess.once('error', (error) => {
+            this.lastFfmpegExit = {
+                code: null,
+                signal: null,
+                at: new Date().toISOString(),
+                track: trackLabel,
+                reason: `spawn failed: ${error.message}`,
+            };
+            logger.error(`[Channel:${this.id}] FFmpeg failed to start for "${trackLabel}": ${error.message}`, {
+                engine: this.getStreamEngineStatus(),
+            });
+        });
+
+        this.ffmpegProcess.once('close', (code, signal) => {
+            const trackMatches = this.tracks.length > 0 && this.tracks[0]?.url === this.currentTrack?.url;
+            const shouldRestart = code !== 0 && this.playing && !this.isTransitioning && trackMatches;
+
+            this.lastFfmpegExit = {
+                code,
+                signal: signal || null,
+                at: new Date().toISOString(),
+                track: trackLabel,
+                reason: shouldRestart ? 'unexpected exit, restarting track' : this.describeFfmpegExitReason(code),
+            };
+
+            if (shouldRestart) {
+                logger.error(`[Channel:${this.id}] FFmpeg exited unexpectedly for "${trackLabel}" (code=${code}, signal=${signal ?? 'none'}); restarting track`);
                 this.play(true);
+                return;
             }
+
+            if (code === 0 || this.isTransitioning) {
+                logger.info(`[Channel:${this.id}] FFmpeg finished "${trackLabel}" (code=${code}, signal=${signal ?? 'none'})`);
+                return;
+            }
+
+            // This is the state a failed health check reports: playing, not idle, yet
+            // no FFmpeg engine running. Log the full snapshot so the cause is visible
+            // rather than just the symptom.
+            logger.error(`[Channel:${this.id}] FFmpeg exited and will NOT be restarted for "${trackLabel}" (code=${code}, signal=${signal ?? 'none'})`, {
+                reason: this.describeFfmpegExitReason(code),
+                engine: this.getStreamEngineStatus(),
+            });
         });
 
         this.stream.on('error', (error) => {
-            logger.error(`[Channel:${this.id}] Stream error:`, { error });
+            logger.error(`[Channel:${this.id}] Stream error for "${trackLabel}":`, { error });
             if (this.playing && !this.isTransitioning) {
                 this.play(true);
             }

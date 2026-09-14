@@ -107,23 +107,24 @@ class ChannelManager {
     }
 
     /**
-     * Liveness of every channel's stream engine for health check.
+     * Liveness of every channel's stream engine for health check. 
      */
     getHealthReport() {
         const channels = [];
         const unhealthy = [];
 
         for (const channel of this.channels.values()) {
-            const streamAlive = channel.isStreamAlive();
+            const engine = channel.getStreamEngineStatus();
             channels.push({
                 id: channel.id,
                 playing: channel.playing,
                 isIdle: channel.isIdle,
                 listeners: channel.clients.size,
-                streamAlive,
-                icecastConnected: !!channel.getIcecastStatus().connected,
+                streamAlive: engine.alive,
+                icecastConnected: engine.icecastConnected,
+                engine,
             });
-            if (!streamAlive) {
+            if (!engine.alive) {
                 unhealthy.push(channel.id);
             }
         }
