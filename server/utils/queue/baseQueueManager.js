@@ -154,6 +154,27 @@ class BaseQueueManager {
         return null;
     }
 
+    updateByKey(key, value, updates) {
+        const index = this.items.findIndex(item => item[key] === value);
+        if (index === -1) {
+            logger.warn("No item found to update:", { [key]: value });
+            return null;
+        }
+        this.items[index] = this.formatItem({ ...this.items[index], ...updates });
+        this.saveItems();
+        return this.items[index];
+    }
+
+    removeWhere(predicate) {
+        const remaining = this.items.filter(item => !predicate(item));
+        const removedCount = this.items.length - remaining.length;
+        if (removedCount > 0) {
+            this.items = remaining;
+            this.saveItems();
+        }
+        return removedCount;
+    }
+
     getFirst() {
         return this.items.length > 0 ? this.items[0] : null;
     }

@@ -396,6 +396,34 @@ class Service {
         }
     }
 
+    async refreshDefaultPlaylist({ playlistId }) {
+        const defaultPlaylistStore = new DefaultPlaylistManager();
+        const metadataStore = new DefaultPlaylistMetadataManager();
+
+        const playlist = defaultPlaylistStore.getAll().find(p => p.playlistId === playlistId);
+        if (!playlist) {
+            throw new Error(`Default playlist not found: ${playlistId}`);
+        }
+
+        const metadata = await generatePlaylistMetadata(playlist.playlistId, playlist.source, "auto");
+        if (metadata.length <= 0) {
+            throw new Error("No songs found in the playlist.");
+        }
+
+        const updatedMetadata = metadata.map(data => ({
+            ...data,
+            playlistId,
+            channelId: playlist.channelId || null
+        }));
+
+        metadataStore.removeWhere(entry => entry.playlistId === playlistId);
+        metadataStore.addMany(updatedMetadata);
+
+        return defaultPlaylistStore.updateByKey("playlistId", playlistId, {
+            metadataUpdatedAt: new Date().toISOString()
+        });
+    }
+
     async removeDefaultPlaylist({ index, playlistId, channelId = null }) {
         const defaultPlaylistStore = new DefaultPlaylistManager();
         const defaultPlaylistMetadataStore = new DefaultPlaylistMetadataManager();

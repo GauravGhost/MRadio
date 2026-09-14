@@ -1,9 +1,13 @@
 import JioSaavn from "../lib/jiosaavn.js";
 import SoundCloud from "../lib/soundcloud.js";
+import Gaana from "../lib/gaana.js";
 import SpotifyAPI from "../lib/spotify.js";
 import Yts from "../lib/yts.js";
 import { addYoutubeVideoId, checkSimilarity, durationFormatter } from "../utils/utils.js";
+import commonConfigService from "./commonConfigService.js";
 import logger from "../utils/logger.js";
+
+const isSearchEnabled = (source) => commonConfigService.isSourceEnabled(source, "search");
 
 /**
  * @description Search song on spotify
@@ -62,6 +66,22 @@ const searchSoundCloudSong = async (spotifyName) => {
 };
 
 /**
+ * @description Search song on Gaana
+ * @param {*} searchName 
+ * @returns 
+ */
+const searchGaanaSong = async (searchName) => {
+    try {
+        const gaana = new Gaana();
+        const song = await gaana.getSongBySongName(searchName);
+        return song;
+    } catch (error) {
+        logger.error("Gaana search error:", error);
+        return null;
+    }
+};
+
+/**
  * @description Search Song on Youtube
  */
 export const searchYouTubeSong = async (spotifyName) => {
@@ -75,22 +95,17 @@ export const searchYouTubeSong = async (spotifyName) => {
 
         const { url, title, timestamp } = videoDetail;
 
-        // Validate the video (this now handles availability checking internally without cookies)
         const { status, message } = await yt.validateVideo(url);
 
         if (!status) {
-            // Log the validation error but don't fail completely
-            // Some videos might have format issues but still be playable
             console.warn(`YouTube video validation failed: ${message} - ${title}`);
 
-            // For format-related errors, we'll still return the video but mark it as potentially problematic
             if (message.includes('Requested format is not available') ||
                 message.includes('format')) {
                 console.info(`Accepting video despite format issues: ${title}`);
                 return { url, title, duration: timestamp, formatWarning: true };
             }
 
-            // For other validation errors (duration, category), don't use this video
             return null;
         }
 
@@ -163,55 +178,78 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
 
         const metadata = createMetadata(songName, searchName, requestedBy);
 
+        const searchChain = [
+            { source: "soundcloud", search: searchSoundCloudSong },
+            { source: "gaana", search: searchGaanaSong },
+            { source: "jiosaavn", search: searchJioSaavnSong },
+            { source: "youtube", search: searchYouTubeSong },
+        ];
+
         // If preference is provided, search preferred platform first
         if (preference) {
-            switch (preference.toLowerCase()) {
-                case 'soundcloud': {
-                    const soundCloudResult = await searchSoundCloudSong(searchName);
-                    if (soundCloudResult) {
-                        return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
-                    }
-                    if (force) throw new Error("Song not found on SoundCloud");
-                    break;
-                }
+            const preferredSource = preference.toLowerCase();
+            const isKnownSource = searchChain.some((entry) => entry.source === preferredSource);
 
-                case 'jiosaavn': {
-                    const jioSaavnResult = await searchJioSaavnSong(searchName);
-                    if (jioSaavnResult) {
-                        return updateMetadata(metadata, "jiosaavn", jioSaavnResult.title, jioSaavnResult.url, jioSaavnResult.duration);
-                    }
-                    if (force) throw new Error("Song not found on JioSaavn");
-                    break;
+            if (isKnownSource && !isSearchEnabled(preferredSource)) {
+                if (force) {
+                    throw new Error(`Search source '${preferredSource}' is disabled`);
                 }
-
-                case 'youtube': {
-                    const youtubeResult = await searchYouTubeSong(searchName);
-                    if (youtubeResult) {
-                        return updateMetadata(metadata, "youtube", youtubeResult.title, youtubeResult.url, youtubeResult.duration);
+                logger.warn(`Search source '${preferredSource}' is disabled; using the default search order instead`);
+            } else {
+                switch (preferredSource) {
+                    case 'soundcloud': {
+                        const soundCloudResult = await searchSoundCloudSong(searchName);
+                        if (soundCloudResult) {
+                            return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
+                        }
+                        if (force) throw new Error("Song not found on SoundCloud");
+                        break;
                     }
-                    if (force) throw new Error("Song not found on YouTube");
-                    break;
-                }
 
-                default:
-                    if (force) throw new Error("Invalid platform preference");
+                    case 'jiosaavn': {
+                        const jioSaavnResult = await searchJioSaavnSong(searchName);
+                        if (jioSaavnResult) {
+                            return updateMetadata(metadata, "jiosaavn", jioSaavnResult.title, jioSaavnResult.url, jioSaavnResult.duration);
+                        }
+                        if (force) throw new Error("Song not found on JioSaavn");
+                        break;
+                    }
+
+                    case 'gaana': {
+                        const gaanaResult = await searchGaanaSong(searchName);
+                        if (gaanaResult) {
+                            return updateMetadata(metadata, "gaana", gaanaResult.title, gaanaResult.url, gaanaResult.duration);
+                        }
+                        if (force) throw new Error("Song not found on Gaana");
+                        break;
+                    }
+
+                    case 'youtube': {
+                        const youtubeResult = await searchYouTubeSong(searchName);
+                        if (youtubeResult) {
+                            return updateMetadata(metadata, "youtube", youtubeResult.title, youtubeResult.url, youtubeResult.duration);
+                        }
+                        if (force) throw new Error("Song not found on YouTube");
+                        break;
+                    }
+
+                    default:
+                        if (force) throw new Error("Invalid platform preference");
+                }
             }
         }
 
         // Search across platforms in order
-        const soundCloudResult = await searchSoundCloudSong(searchName);
-        if (soundCloudResult) {
-            return updateMetadata(metadata, "soundcloud", soundCloudResult.title, soundCloudResult.url, soundCloudResult.duration);
-        }
+        for (const { source, search } of searchChain) {
+            if (!isSearchEnabled(source)) {
+                logger.info(`Search source '${source}' is disabled; skipping`);
+                continue;
+            }
 
-        const jioSaavnResult = await searchJioSaavnSong(searchName);
-        if (jioSaavnResult) {
-            return updateMetadata(metadata, "jiosaavn", jioSaavnResult.title, jioSaavnResult.url, jioSaavnResult.duration);
-        }
-
-        const youtubeResult = await searchYouTubeSong(searchName);
-        if (youtubeResult) {
-            return updateMetadata(metadata, "youtube", youtubeResult.title, youtubeResult.url, youtubeResult.duration);
+            const result = await search(searchName);
+            if (result) {
+                return updateMetadata(metadata, source, result.title, result.url, result.duration);
+            }
         }
 
         throw new Error("Song not found on any platform");
@@ -277,6 +315,24 @@ export const searchJioSaavnPlaylist = async (playlistId, requestedBy) => {
     return playlistMetadata;
 }
 
+export const searchGaanaPlaylist = async (playlistId, requestedBy) => {
+    const gaana = new Gaana();
+    const playlistArray = await gaana.getPlaylistDetail(playlistId);
+    if (!playlistArray || !Array.isArray(playlistArray) || playlistArray.length === 0) {
+        throw new Error("Could not find songs in Gaana playlist. Please check the playlist seokey or link.");
+    }
+    const playlistMetadata = playlistArray
+        .filter((track) => Number(track.duration) <= 900)
+        .map((track) => ({
+            title: track.title,
+            duration: durationFormatter(track.duration),
+            requestedBy: requestedBy,
+            url: track.streamUrls.highQuality || track.streamUrls.mediumQuality,
+            urlType: "gaana"
+        }));
+    return playlistMetadata;
+}
+
 export const searchSpotifyPlaylist = async (playlistId, requestedBy) => {
     let cleanId = String(playlistId || "").trim();
     const spotify = new SpotifyAPI();
@@ -288,8 +344,6 @@ export const searchSpotifyPlaylist = async (playlistId, requestedBy) => {
         throw new Error("No videos found in Spotify playlist.");
     }
 
-    // We return the searchQuery as the originalName so the queue manager will process it 
-    // and resolve it via YouTube/SoundCloud when it plays.
     return tracks
         .filter((track) => track.duration <= 900)
         .map((track) => ({
@@ -313,11 +367,16 @@ export const generatePlaylistMetadata = async (playlistId, sourceName, requested
         throw new Error("Invalid playlist parameters: playlistId and source are required");
     }
     const normalizedSource = String(sourceName).toLowerCase().trim();
+    if (!isSearchEnabled(normalizedSource)) {
+        throw new Error(`Source '${sourceName}' is disabled`);
+    }
     switch (normalizedSource) {
         case "youtube":
             return await searchYoutubePlaylist(playlistId, requestedBy);
         case "jiosaavn":
             return await searchJioSaavnPlaylist(playlistId, requestedBy);
+        case "gaana":
+            return await searchGaanaPlaylist(playlistId, requestedBy);
         case "spotify":
             return await searchSpotifyPlaylist(playlistId, requestedBy);
         case "soundcloud":

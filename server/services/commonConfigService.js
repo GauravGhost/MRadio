@@ -1,16 +1,55 @@
 import { getCommonConfigJson, saveCommonConfigJson, getDefaultPlaylistJson } from "../utils/utils.js";
-import { COMMON_CONFIG_KEYS } from "../utils/constant.js";
+import { COMMON_CONFIG_KEYS, DEFAULT_SOURCE_CONFIG, SOURCE_CAPABILITIES } from "../utils/constant.js";
 import logger from "../utils/logger.js";
+
+const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 
 class CommonConfigService {
     constructor() {
         this.config = getCommonConfigJson();
+        this.normalizeSourceConfig();
         this.allowedKeys = Object.values(COMMON_CONFIG_KEYS);
         this.validations = this.setupValidations();
     }
 
+    /**
+     * @description Backfills any missing source/capability in the stored config so it always
+     * carries a complete `{ source: { search, download } }` map. Absent values default to enabled.
+     */
+    normalizeSourceConfig() {
+        const stored = this.config[COMMON_CONFIG_KEYS.sources];
+        const normalized = {};
+        for (const source of Object.keys(DEFAULT_SOURCE_CONFIG)) {
+            const entry = isPlainObject(stored) && isPlainObject(stored[source]) ? stored[source] : {};
+            normalized[source] = SOURCE_CAPABILITIES.reduce((acc, capability) => {
+                acc[capability] = entry[capability] !== false;
+                return acc;
+            }, {});
+        }
+        this.config[COMMON_CONFIG_KEYS.sources] = normalized;
+    }
+
+    /**
+     * @description Check whether a source is enabled for a given capability.
+     * Unknown sources/capabilities default to enabled so new integrations keep working.
+     * @param {string} source
+     * @param {"search"|"download"} capability
+     * @returns {boolean}
+     */
+    isSourceEnabled(source, capability) {
+        const entry = this.config?.[COMMON_CONFIG_KEYS.sources]?.[source];
+        if (!isPlainObject(entry)) return true;
+        return entry[capability] !== false;
+    }
+
     setupValidations() {
         const validatePlaylistValue = (value) => value === "all";
+        const validSources = Object.keys(DEFAULT_SOURCE_CONFIG);
+        const isValidSourceEntry = (entry) => isPlainObject(entry) &&
+            Object.entries(entry).every(([capability, enabled]) =>
+                SOURCE_CAPABILITIES.includes(capability) && typeof enabled === "boolean"
+            );
+
         return {
             [COMMON_CONFIG_KEYS.defaultPlaylistGenre]: {
                 validate: async (value) => {
@@ -20,6 +59,12 @@ class CommonConfigService {
                     return new Set(playlists.map(p => p.genre)).has(value);
                 },
                 errorMessage: (value) => `Genre '${value}' does not exist in default playlists`
+            },
+            [COMMON_CONFIG_KEYS.sources]: {
+                validate: async (value) => isPlainObject(value) && Object.entries(value).every(
+                    ([source, entry]) => validSources.includes(source) && isValidSourceEntry(entry)
+                ),
+                errorMessage: () => `sources must map each of [${validSources.join(', ')}] to { ${SOURCE_CAPABILITIES.map(c => `${c}?: boolean`).join(', ')} }`
             },
         };
     }
@@ -73,6 +118,24 @@ class CommonConfigService {
     }
 
     /**
+     * @description Applies a single config value, keeping specialized keys (e.g. sources) normalized.
+     */
+    applyValue(key, value, partial) {
+        if (partial && isPlainObject(this.config[key]) && isPlainObject(value)) {
+            this.config[key] = {
+                ...this.config[key],
+                ...value
+            };
+        } else {
+            this.config[key] = value;
+        }
+
+        if (key === COMMON_CONFIG_KEYS.sources) {
+            this.normalizeSourceConfig();
+        }
+    }
+
+    /**
      * Update config value by key
      * @param {string} key - The key to update
      * @param {any} value - The new value
@@ -82,14 +145,7 @@ class CommonConfigService {
     async update(key, value, partial = false) {
         try {
             await this.validateKeyAndValue(key, value);
-            if (partial && typeof this.config[key] === 'object' && typeof value === 'object') {
-                this.config[key] = {
-                    ...this.config[key],
-                    ...value
-                };
-            } else {
-                this.config[key] = value;
-            }
+            this.applyValue(key, value, partial);
 
             saveCommonConfigJson(this.config);
             return true;
@@ -116,14 +172,7 @@ class CommonConfigService {
 
             // If all validations pass, apply the updates
             Object.entries(updates).forEach(([key, value]) => {
-                if (partial && typeof this.config[key] === 'object' && typeof value === 'object') {
-                    this.config[key] = {
-                        ...this.config[key],
-                        ...value
-                    };
-                } else {
-                    this.config[key] = value;
-                }
+                this.applyValue(key, value, partial);
             });
 
             saveCommonConfigJson(this.config);

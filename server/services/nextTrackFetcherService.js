@@ -40,29 +40,54 @@ const getFallbackTrack = async (dir = DEFAULT_FALLBACK_LOCATION) => {
     }
 }
 
-const checkAndRefreshMetadata = async (playlist) => {
-    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
-    const metadataDate = new Date(playlist.metadataUpdatedAt);
-    const now = new Date();
+const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
-    if (now - metadataDate > TWO_DAYS_MS) {
-        logger.info("Updating the metadata for : " + playlist.title);
-        const apiService = new Service();
-        await apiService.removeDefaultPlaylist({ playlistId: playlist.playlistId, channelId: playlist.channelId || null });
-        await apiService.addDefaultPlaylist({
-            playlistId: playlist.playlistId,
-            title: playlist.title,
-            source: playlist.source,
-            isActive: playlist.isActive,
-            genre: playlist.genre,
-            channelId: playlist.channelId || null
-        });
+const isMetadataStale = (playlist) => {
+    const metadataDate = new Date(playlist.metadataUpdatedAt);
+    if (Number.isNaN(metadataDate.getTime())) {
+        return true;
     }
+    return Date.now() - metadataDate.getTime() > TWO_DAYS_MS;
+}
+
+let refreshChain = Promise.resolve();
+const inFlightRefreshes = new Map();
+
+const checkAndRefreshMetadata = async (playlist) => {
+    if (!isMetadataStale(playlist)) {
+        return;
+    }
+
+    const inFlight = inFlightRefreshes.get(playlist.playlistId);
+    if (inFlight) {
+        return inFlight;
+    }
+
+    const refreshTask = refreshChain
+        .catch(() => {})
+        .then(async () => {
+            logger.info("Updating the metadata for : " + playlist.title);
+            const apiService = new Service();
+            await apiService.refreshDefaultPlaylist({ playlistId: playlist.playlistId });
+        })
+        .catch((error) => {
+            logger.warn("Failed to refresh default playlist metadata:", {
+                playlistId: playlist.playlistId,
+                message: error.message
+            });
+        })
+        .finally(() => {
+            inFlightRefreshes.delete(playlist.playlistId);
+        });
+
+    refreshChain = refreshTask;
+    inFlightRefreshes.set(playlist.playlistId, refreshTask);
+
+    return refreshTask;
 }
 
 const emptySongQueueHandler = async (channelId) => {
     try {
-        const defaultPlaylistMetadata = new DefaultPlaylistMetadataManager();
         const defaultPlaylistStore = new DefaultPlaylistManager();
 
         const allPlaylists = defaultPlaylistStore.getAll()
@@ -91,6 +116,8 @@ const emptySongQueueHandler = async (channelId) => {
             channelId: hasOwnPlaylists ? channelId : null,
         };
 
+        // Read after the refresh so any regenerated metadata is picked up immediately.
+        const defaultPlaylistMetadata = new DefaultPlaylistMetadataManager();
         const defaultPlaylistArr = defaultPlaylistMetadata.getAll(filter);
         if (!defaultPlaylistArr.length) {
             return getFallbackTrack();
@@ -136,7 +163,7 @@ const downloadFromJioSaavn = async (songData) => {
 }
 
 /**
- * @description Download song from jiosaavn, just return the url.
+ * @description Download song from soundcloud, just return the url.
  * @param {*} songData 
  * @returns 
  */
@@ -147,11 +174,26 @@ const downloadFromSoundCloud = async (songData) => {
 }
 
 /**
+ * @description Download song from gaana, just return the url.
+ * @param {*} songData 
+ * @returns 
+ */
+const downloadFromGaana = async (songData) => {
+    const yt = new MyDownloader();
+    const { url } = await yt.downloadGaana(songData.url, songData.title);
+    return { url: url, title: songData.title };
+}
+
+/**
  * @description Fetching song file by the source type.
  * @param {*} songData 
  * @returns 
  */
 const fetchByUrlType = async (songData) => {
+    if (songData.urlType !== 'fallback' && !commonConfigService.isSourceEnabled(songData.urlType, 'download')) {
+        throw new Error(`Download source '${songData.urlType}' is disabled`);
+    }
+
     switch (songData.urlType) {
         case 'youtube':
             return await downloadFromYoutube(songData);
@@ -159,6 +201,8 @@ const fetchByUrlType = async (songData) => {
             return await downloadFromJioSaavn(songData);
         case 'soundcloud':
             return await downloadFromSoundCloud(songData);
+        case 'gaana':
+            return await downloadFromGaana(songData);
         case 'fallback':
             return { url: songData.url, title: songData.title };
         default:

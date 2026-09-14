@@ -1,10 +1,10 @@
 # MRadio - Radio Broadcasting System
 
-A powerful radio streaming platform built for multi-channel broadcasting, dynamic queues, and seamless music streaming.
+A powerful radio broadcasting system built for multi-channel broadcasting that streams music from YouTube, JioSaavn, SoundCloud, and Gaana, with dynamic queues, real-time queue management, and Icecast support.
 
 ## Features
 
-- **Multi-Platform Music**: Stream from YouTube, JioSaavn, and SoundCloud
+- **Multi-Platform Music**: Stream from YouTube, JioSaavn, SoundCloud, and Gaana
 - **Live Broadcasting**: Icecast server integration + direct HTTP MP3 streaming
 - **Queue Management**: Dynamic song queuing with priority support
 - **Real-Time Updates**: WebSocket integration for live client notifications
@@ -319,7 +319,7 @@ socket.on('queueUpdate', (queueData) => {
 | `SPOTIFY_CLIEND_SECRET_ID` | No | - | Spotify Client Secret |
 | `SOUNDCLOUD_API_KEY` | No | - | SoundCloud API Key |
 | `INITIAL_PLAYLIST_ID` | No | - | Default playlist ID |
-| `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud) |
+| `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud/gaana) |
 | `INITIAL_PLAYLIST_TITLE` | No | - | Default playlist title |
 | `ICECAST_HOST` | No | - | Icecast server host |
 | `ICECAST_PORT` | No | - | Icecast server port |

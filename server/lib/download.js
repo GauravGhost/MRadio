@@ -8,7 +8,7 @@ import { getFfmpegPath, getCookiesPath } from '../utils/utils.js';
 import axios from 'axios';
 import cacheManager from './cacheManager.js';
 import fsHelper from '../utils/helper/fs-helper.js';
-import { DEFAULT_TRACKS_LOCATION } from '../utils/constant.js';
+import { DEFAULT_TRACKS_LOCATION, GANAA_REQUEST_HEADERS } from '../utils/constant.js';
 import SoundCloud from './soundcloud.js';
 import { createDownloadLinks } from '../utils/crypto.js';
 
@@ -171,6 +171,53 @@ class MyDownloader {
     async downloadJioSaavn(url, title){
         const streamUrl = createDownloadLinks(url)[3].url;
         return await this.downloadFromUrl(streamUrl, title)
+    }
+
+    async downloadGaana(url, title, outputPath = DEFAULT_TRACKS_LOCATION) {
+        // Check if song exists in cache first
+        const cachedPath = cacheManager.getFromCache(title);
+        if (cachedPath) {
+            logger.info(`Using cached version of: ${title}`);
+            return { url: cachedPath };
+        }
+
+        // Ensure tracks directory exists
+        if (!fsHelper.exists(outputPath)) {
+            fsHelper.createDirectory(outputPath);
+            logger.info(`Created directory: ${outputPath}`);
+        }
+
+        const outputFilePath = cacheManager.getOriginalPath(title);
+        logger.info(`Downloading ${title} from Gaana HLS to ${outputFilePath}`);
+
+        try {
+            await new Promise((resolve, reject) => {
+                ffmpeg(url)
+                    .inputOptions(['-user_agent', GANAA_REQUEST_HEADERS['User-Agent']])
+                    .noVideo()
+                    .audioCodec('libmp3lame')
+                    .audioBitrate('128k')
+                    .audioChannels(2)
+                    .audioFrequency(44100)
+                    .format('mp3')
+                    .on('end', () => {
+                        logger.info(`Successfully downloaded ${title} to ${outputFilePath}`);
+                        resolve();
+                    })
+                    .on('error', (err) => {
+                        reject(err);
+                    })
+                    .save(outputFilePath);
+            });
+
+            return { url: outputFilePath };
+        } catch (error) {
+            logger.error(`Error downloading ${title}:`, error.message);
+            if (fsHelper.exists(outputFilePath)) {
+                fsHelper.delete(outputFilePath);
+            }
+            throw error;
+        }
     }
 }
 
