@@ -5,6 +5,7 @@ A powerful radio broadcasting system built for multi-channel broadcasting that s
 ## Features
 
 - **Multi-Platform Music**: Stream from YouTube, JioSaavn, SoundCloud, and Gaana
+- **Metadata Providers**: Optional fetch-only providers (e.g. Spotify) that canonicalize a request into an accurate "title artist" before the download sources search for it
 - **Live Broadcasting**: Icecast server integration + direct HTTP MP3 streaming
 - **Queue Management**: Dynamic song queuing with priority support
 - **Real-Time Updates**: WebSocket integration for live client notifications
@@ -272,6 +273,51 @@ implicit channel.
 | PATCH | `/api/admin/tokens/username/:username` | Reassign token channels | Admin |
 | POST | `/api/admin/cookies` | Update cookies | Admin |
 
+### Source Configuration
+
+`GET /api/config?key=sources` returns a `sources` map — one entry per **download source**, each with
+`search` and `download` capabilities (search and download are combined per platform), keyed/ordered as
+`soundcloud`, `gaana`, `jiosaavn`, `youtube`. Toggle them with `POST /api/config` (add `?partial=true`
+to merge instead of replacing):
+
+```bash
+curl -X POST "http://localhost:9126/api/config?partial=true" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
+  -d '{"key": "sources", "value": {"gaana": {"search": false, "download": false}}}'
+```
+
+All four sources default to `search` and `download` enabled. Disabling a source turns off **both** its
+search and its download.
+
+### Metadata Providers
+
+Metadata providers are a separate, **fetch-only** layer. Their only job is to turn a raw user request
+(possibly a typo) into an accurate `"title artist"` query; that title is then passed to the download
+sources, which do the actual searching and downloading. They never provide audio.
+
+`GET /api/config?key=metadataProviders` returns `{ "spotify": { "enabled": false } }`. Enable one with
+`POST /api/config` (add `?partial=true` to merge):
+
+```bash
+curl -X POST "http://localhost:9126/api/config?partial=true" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: YOUR_ADMIN_API_KEY" \
+  -H "x-admin-token-key: YOUR_ADMIN_TOKEN_KEY" \
+  -d '{"key": "metadataProviders", "value": {"spotify": {"enabled": true}}}'
+```
+
+Spotify is disabled by default, so nothing calls it until you enable it. When it is enabled **and**
+credentials are set, the request is normalized before the source search; if it is disabled, has no
+credentials, or fails to match, the raw request is used unchanged.
+
+Spotify's track search uses app client-credentials and does **not** require a Premium account — only
+the free client id/secret from the [Spotify developer dashboard](https://developer.spotify.com/dashboard)
+(`SPOTIFY_CLIEND_ID` / `SPOTIFY_CLIEND_SECRET_ID`). Adding another provider means registering it in
+`DEFAULT_METADATA_PROVIDER_CONFIG` and adding an implementation in `metadataProviderService.js`;
+sources and download logic are untouched.
+
 ### Stream URLs
 
 | URL | Description |
@@ -315,11 +361,11 @@ socket.on('queueUpdate', (queueData) => {
 | `RESUME_MAX_GAP_SECONDS` | No | `180` | Max gap for session resume |
 | `X_ADMIN_API_KEY` | **Yes** | - | Admin API key |
 | `X_ADMIN_TOKEN_KEY` | **Yes** | - | Admin token key |
-| `SPOTIFY_CLIEND_ID` | No | - | Spotify Client ID |
-| `SPOTIFY_CLIEND_SECRET_ID` | No | - | Spotify Client Secret |
+| `SPOTIFY_CLIEND_ID` | No | - | Spotify client ID (metadata provider, only used when enabled) |
+| `SPOTIFY_CLIEND_SECRET_ID` | No | - | Spotify client secret (metadata provider, only used when enabled) |
 | `SOUNDCLOUD_API_KEY` | No | - | SoundCloud API Key |
 | `INITIAL_PLAYLIST_ID` | No | - | Default playlist ID |
-| `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud/gaana) |
+| `INITIAL_PLAYLIST_SOURCE` | No | - | Playlist source (youtube/jiosaavn/soundcloud/gaana/spotify) |
 | `INITIAL_PLAYLIST_TITLE` | No | - | Default playlist title |
 | `ICECAST_HOST` | No | - | Icecast server host |
 | `ICECAST_PORT` | No | - | Icecast server port |

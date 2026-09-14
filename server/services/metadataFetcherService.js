@@ -5,33 +5,10 @@ import SpotifyAPI from "../lib/spotify.js";
 import Yts from "../lib/yts.js";
 import { addYoutubeVideoId, checkSimilarity, durationFormatter } from "../utils/utils.js";
 import commonConfigService from "./commonConfigService.js";
+import { normalizeSongQuery } from "./metadataProviderService.js";
 import logger from "../utils/logger.js";
 
 const isSearchEnabled = (source) => commonConfigService.isSourceEnabled(source, "search");
-
-/**
- * @description Search song on spotify
- * @param {*} songName 
- * @returns 
- */
-const searchSpotifySong = async (songName) => {
-    try {
-        const spotify = new SpotifyAPI();
-        const songDetail = await spotify.searchTrack(songName);
-        if (!songDetail) {
-            throw new Error("No Song found By this Name");
-        }
-
-        if (!songDetail.name) {
-            throw new Error("Invalid song name");
-        }
-        // Using searchQuery (title + artist)
-        return { name: songDetail.searchQuery, id: songDetail.id };
-    } catch (error) {
-        logger.error("Spotify search error:", error);
-        return null;
-    }
-};
 
 /**
  * @description Search song on JioSaavn
@@ -164,15 +141,12 @@ export const generateSongMetadata = async (songName, requestedBy, force = false,
     try {
         let searchName = songName;
 
-        // If not forced, try Spotify first to normalize track title and artist
+        // If not forced, let the enabled metadata providers canonicalize the request
+        // (e.g. fix typos) before the download sources search for it.
         if (!force) {
-            try {
-                const spotifyResult = await searchSpotifySong(songName);
-                if (spotifyResult?.name) {
-                    searchName = spotifyResult.name;
-                }
-            } catch (err) {
-                console.warn(`[metadataFetcher] Spotify normalization skipped for "${songName}":`, err?.message);
+            const match = await normalizeSongQuery(songName);
+            if (match?.searchQuery) {
+                searchName = match.searchQuery;
             }
         }
 

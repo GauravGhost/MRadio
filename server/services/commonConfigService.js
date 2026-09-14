@@ -1,5 +1,5 @@
 import { getCommonConfigJson, saveCommonConfigJson, getDefaultPlaylistJson } from "../utils/utils.js";
-import { COMMON_CONFIG_KEYS, DEFAULT_SOURCE_CONFIG, SOURCE_CAPABILITIES } from "../utils/constant.js";
+import { COMMON_CONFIG_KEYS, DEFAULT_SOURCE_CONFIG, SOURCE_CAPABILITIES, DEFAULT_METADATA_PROVIDER_CONFIG } from "../utils/constant.js";
 import logger from "../utils/logger.js";
 
 const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -8,14 +8,11 @@ class CommonConfigService {
     constructor() {
         this.config = getCommonConfigJson();
         this.normalizeSourceConfig();
+        this.normalizeMetadataProviders();
         this.allowedKeys = Object.values(COMMON_CONFIG_KEYS);
         this.validations = this.setupValidations();
     }
 
-    /**
-     * @description Backfills any missing source/capability in the stored config so it always
-     * carries a complete `{ source: { search, download } }` map. Absent values default to enabled.
-     */
     normalizeSourceConfig() {
         const stored = this.config[COMMON_CONFIG_KEYS.sources];
         const normalized = {};
@@ -27,6 +24,20 @@ class CommonConfigService {
             }, {});
         }
         this.config[COMMON_CONFIG_KEYS.sources] = normalized;
+    }
+
+    normalizeMetadataProviders() {
+        const stored = this.config[COMMON_CONFIG_KEYS.metadataProviders];
+        const normalized = {};
+        for (const provider of Object.keys(DEFAULT_METADATA_PROVIDER_CONFIG)) {
+            const entry = isPlainObject(stored) && isPlainObject(stored[provider]) ? stored[provider] : {};
+            normalized[provider] = {
+                enabled: typeof entry.enabled === "boolean"
+                    ? entry.enabled
+                    : DEFAULT_METADATA_PROVIDER_CONFIG[provider].enabled === true
+            };
+        }
+        this.config[COMMON_CONFIG_KEYS.metadataProviders] = normalized;
     }
 
     /**
@@ -42,6 +53,17 @@ class CommonConfigService {
         return entry[capability] !== false;
     }
 
+    /**
+     * @description Check whether a metadata provider is enabled. Providers are opt-in, so
+     * unknown/absent providers default to disabled.
+     * @param {string} provider
+     * @returns {boolean}
+     */
+    isMetadataProviderEnabled(provider) {
+        const entry = this.config?.[COMMON_CONFIG_KEYS.metadataProviders]?.[provider];
+        return isPlainObject(entry) && entry.enabled === true;
+    }
+
     setupValidations() {
         const validatePlaylistValue = (value) => value === "all";
         const validSources = Object.keys(DEFAULT_SOURCE_CONFIG);
@@ -49,6 +71,7 @@ class CommonConfigService {
             Object.entries(entry).every(([capability, enabled]) =>
                 SOURCE_CAPABILITIES.includes(capability) && typeof enabled === "boolean"
             );
+        const validMetadataProviders = Object.keys(DEFAULT_METADATA_PROVIDER_CONFIG);
 
         return {
             [COMMON_CONFIG_KEYS.defaultPlaylistGenre]: {
@@ -66,22 +89,20 @@ class CommonConfigService {
                 ),
                 errorMessage: () => `sources must map each of [${validSources.join(', ')}] to { ${SOURCE_CAPABILITIES.map(c => `${c}?: boolean`).join(', ')} }`
             },
+            [COMMON_CONFIG_KEYS.metadataProviders]: {
+                validate: async (value) => isPlainObject(value) && Object.entries(value).every(
+                    ([provider, entry]) => validMetadataProviders.includes(provider) &&
+                        isPlainObject(entry) && typeof entry.enabled === "boolean"
+                ),
+                errorMessage: () => `metadataProviders must map each of [${validMetadataProviders.join(', ')}] to { enabled: boolean }`
+            },
         };
     }
-    /**
-     * Validate if a key is allowed
-     * @param {string} key - The key to validate
-     * @returns {boolean} True if key is allowed, false otherwise
-     */
+
     isValidKey(key) {
         return this.allowedKeys.includes(key);
     }
 
-    /**
-     * Throw error if key is invalid
-     * @param {string} key - The key to validate
-     * @throws {Error} If key is not allowed
-     */
     async validateKeyAndValue(key, value) {
         if (!this.isValidKey(key)) {
             throw new Error(`Invalid config key: ${key}. Allowed keys are: ${this.allowedKeys.join(', ')}`);
@@ -97,19 +118,10 @@ class CommonConfigService {
         }
     }
 
-    /**
-     * Get all config data
-     * @returns {Object} The entire config object
-     */
     getAll() {
         return this.config;
     }
 
-    /**
-     * Get config value by key
-     * @param {string} key - The key to retrieve
-     * @returns {any} The value associated with the key, or undefined if not found
-     */
     async get(key) {
         if(key){
             return this.config[key];
@@ -133,15 +145,12 @@ class CommonConfigService {
         if (key === COMMON_CONFIG_KEYS.sources) {
             this.normalizeSourceConfig();
         }
+
+        if (key === COMMON_CONFIG_KEYS.metadataProviders) {
+            this.normalizeMetadataProviders();
+        }
     }
 
-    /**
-     * Update config value by key
-     * @param {string} key - The key to update
-     * @param {any} value - The new value
-     * @param {boolean} [partial=false] - If true and both old and new values are objects, performs a partial update
-     * @returns {boolean} True if update was successful, false otherwise
-     */
     async update(key, value, partial = false) {
         try {
             await this.validateKeyAndValue(key, value);
@@ -155,12 +164,6 @@ class CommonConfigService {
         }
     }
 
-    /**
-     * Update multiple config values at once
-     * @param {Object} updates - Object containing key-value pairs to update
-     * @param {boolean} [partial=false] - If true, performs partial updates for object values
-     * @returns {boolean} True if all updates were successful, false otherwise
-     */
     async updateMultiple(updates, partial = false) {
         try {
             // Validate all updates first
@@ -183,11 +186,6 @@ class CommonConfigService {
         }
     }
 
-    /**
-     * Delete a config key
-     * @param {string} key - The key to delete
-     * @returns {boolean} True if deletion was successful, false otherwise
-     */
     async delete(key) {
         try {
             if (!this.isValidKey(key)) {

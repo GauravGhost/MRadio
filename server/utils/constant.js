@@ -31,7 +31,8 @@ export const RESUME_MIN_REMAINING_SECONDS = 5;
 
 export const COMMON_CONFIG_KEYS = {
     defaultPlaylistGenre: "defaultPlaylistGenre",
-    sources: "sources"
+    sources: "sources",
+    metadataProviders: "metadataProviders"
 };
 
 export const STREAM_MEDIA_TYPE = {
@@ -49,6 +50,10 @@ export const DEFAULT_SOURCE_CONFIG = {
     gaana: { search: true, download: true },
     jiosaavn: { search: true, download: true },
     youtube: { search: true, download: true }
+};
+
+export const DEFAULT_METADATA_PROVIDER_CONFIG = {
+    spotify: { enabled: false }
 };
 
 export const GANAA_BASE_URL = "https://gaana.com/apiv2";
